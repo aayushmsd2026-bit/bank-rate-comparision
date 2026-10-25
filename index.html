@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202610250538">
+  <link rel="stylesheet" href="style.css?v=202610250545">
 </head>
 <body>
   <header class="nav">
@@ -68,7 +68,9 @@
         <span><i class="dot good"></i>Better than market average</span>
         <span><i class="dot bad"></i>Worse than market average</span>
         <span><i class="tick"></i>Market average</span>
-        <span>▲▼ gap in percentage points</span>
+        <span><b class="chg good">▲</b> NMB ahead of market average</span>
+        <span><b class="chg bad">▼</b> NMB behind market average</span>
+        <span>gaps in percentage points</span>
       </p>
     </section>
 
@@ -96,10 +98,10 @@
       </div>
       <div class="grid-wrap"><table id="deposit-table" class="grid"></table></div>
       <p class="legend">
-        <span><b class="chg good">▼</b> NMB pays more</span>
-        <span><b class="chg bad">▲</b> Bank pays more than NMB</span>
+        <span><b class="chg good">▲</b> NMB pays more than this bank</span>
+        <span><b class="chg bad">▼</b> NMB pays less than this bank</span>
         <span><span class="star">★</span> Highest in market</span>
-        <span>Gap = bank's highest rate − NMB's highest rate (pp) · hover a cell for product names</span>
+        <span>Gap compares highest rates, in pp · hover a cell for product names</span>
       </p>
     </section>
     <!-- Lending -->
@@ -126,10 +128,10 @@
       </div>
       <div class="grid-wrap"><table id="loan-table" class="grid"></table></div>
       <p class="legend">
-        <span><b class="chg good">▲</b> NMB cheaper</span>
-        <span><b class="chg bad">▼</b> Bank cheaper than NMB</span>
+        <span><b class="chg good">▲</b> NMB cheaper than this bank</span>
+        <span><b class="chg bad">▼</b> NMB dearer than this bank</span>
         <span><span class="star">★</span> Lowest in market</span>
-        <span>Gap = bank's lowest rate − NMB's lowest rate (pp) · hover a cell for product names</span>
+        <span>Gap compares lowest rates, in pp · hover a cell for product names</span>
       </p>
     </section>
 
@@ -147,6 +149,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202610250538"></script>
+  <script src="app.js?v=202610250545"></script>
 </body>
 </html>

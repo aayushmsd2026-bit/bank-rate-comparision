@@ -281,12 +281,15 @@ function rateHtml(r, mode) {
   return `${r.lo.toFixed(2)}<span class="to">–</span>${pct(r.hi)}`;
 }
 
-// Arrow + gap vs NMB. diff = bank − NMB. Green when NMB is the better deal.
-function arrow(diff, lowerIsBetter) {
+// One rule everywhere: ▲ green = NMB ahead, ▼ red = NMB behind, by the gap in pp.
+// diff = other − NMB (other = a competitor's rate, or the market average).
+// lowerIsBetter: true for loans and base rate, false for deposits.
+function arrow(diff, lowerIsBetter, vs = "this bank") {
   if (diff === null || diff === undefined || !Number.isFinite(diff)) return "";
-  if (Math.abs(diff) < 0.005) return `<span class="chg even">=</span>`;
-  const nmbBetter = lowerIsBetter ? diff > 0 : diff < 0;
-  return `<span class="chg ${nmbBetter ? "good" : "bad"}">${diff > 0 ? "▲" : "▼"}${Math.abs(diff).toFixed(2)}</span>`;
+  const gap = Math.abs(diff).toFixed(2);
+  if (Math.abs(diff) < 0.005) return `<span class="chg even" title="NMB level with ${vs}">=</span>`;
+  const ahead = lowerIsBetter ? diff > 0 : diff < 0;
+  return `<span class="chg ${ahead ? "good" : "bad"}" title="NMB ${ahead ? "ahead of" : "behind"} ${vs} by ${gap} pp">${ahead ? "▲" : "▼"}${gap}</span>`;
 }
 
 // ---------- rendering ----------
@@ -353,7 +356,7 @@ function renderScorecard(section) {
     const r = { s: base, lowerIsBetter: true };
     body += `<tr class="seg"><td colspan="5">Funding</td></tr>
       <tr><td class="p-name">Base rate</td><td class="p-nmb">${pct(base.nmb)}</td><td class="p-rank">${base.rank}<span>/${base.n}</span></td>
-      <td class="p-pos">${positionBar(r)}</td><td class="p-chg">${arrow(base.nmb - base.avg, true)}</td></tr>`;
+      <td class="p-pos">${positionBar(r)}</td><td class="p-chg">${arrow(base.avg - base.nmb, true, "the market average")}</td></tr>`;
   }
   for (const r of shown) {
     if (r.segment !== seg) { seg = r.segment; body += `<tr class="seg"><td colspan="5">${esc(seg)}</td></tr>`; }
@@ -363,14 +366,14 @@ function renderScorecard(section) {
       <td class="p-nmb">${rateHtml(nmbCell.range)}</td>
       <td class="p-rank">${r.s.rank}<span>/${r.s.n}</span></td>
       <td class="p-pos">${positionBar(r)}</td>
-      <td class="p-chg">${arrow(r.s.nmb - r.s.avg, r.lowerIsBetter)}</td>
+      <td class="p-chg">${arrow(r.s.avg - r.s.nmb, r.lowerIsBetter, "the market average")}</td>
     </tr>`;
   }
   $(`${section}-score`).innerHTML = `<thead><tr><th>Product</th><th>NMB</th><th>Rank</th><th>Position: best → worst</th><th class="num">vs avg</th></tr></thead><tbody>${body}</tbody>`;
   $(`${section}-missing`).innerHTML = missing.length
     ? `<b>Not offered by NMB (${missing.length}):</b> ${missing.map((r) => esc(rowLabel(r))).join(", ")}` : "";
 
-  const csv = [["Segment", "Product", "Variant", "NMB", "NMB rank", "Banks", "Market best", "Market average", "Market worst", "NMB minus average"]];
+  const csv = [["Segment", "Product", "Variant", "NMB", "NMB rank", "Banks", "Market best", "Market average", "Market worst", "NMB minus average (pp)"]];
   for (const r of rows) {
     const s = r.s, best = r.lowerIsBetter ? s.min : s.max, worst = r.lowerIsBetter ? s.max : s.min;
     csv.push([r.segment, r.product, r.variant || "", s.nmb?.toFixed(2) ?? "Not offered", s.rank ?? "", s.n, best.toFixed(2), s.avg.toFixed(2), worst.toFixed(2), s.nmb === null ? "" : (s.nmb - s.avg).toFixed(2)]);
@@ -435,7 +438,7 @@ function renderGrid(section) {
   $(`${section}-table`).innerHTML = head + `<tbody>${body}</tbody>`;
   $(`${section}-jump`).innerHTML = segments.map(([name, id]) => `<button type="button" data-jump="${id}">${esc(name)}</button>`).join("");
 
-  const csv = [["Segment", "Product", "Variant", "NMB rank", "Market best", ...cols.map((b) => b.name), ...others.map((b) => `${b.name} vs NMB`)]];
+  const csv = [["Segment", "Product", "Variant", "NMB rank", "Market best", ...cols.map((b) => b.name), ...others.map((b) => `${b.name} minus NMB (pp)`)]];
   csv.push(["", "Base rate", "", "", "", ...cols.map((b) => m.base[b.code]?.toFixed(2) ?? ""), ...others.map((b) => m.base[b.code] !== undefined ? (m.base[b.code] - nmbBase).toFixed(2) : "")]);
   for (const r of rows) {
     const nmb = r.cells[NMB];
