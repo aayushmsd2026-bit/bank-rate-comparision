@@ -127,3 +127,34 @@ tr.open .caret { transform: rotate(90deg); }
   .panel-head { align-items: stretch; }
 }
 .who { font-size: .78rem; color: var(--muted); }
+
+/* ---------- matrix (loans / deposits) ---------- */
+.matrix-wrap { max-height: calc(100vh - 230px); min-height: 360px; overflow: auto; }
+.matrix { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+.matrix th, .matrix td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 7px 10px; vertical-align: top; }
+.matrix thead th { position: sticky; top: 0; z-index: 2; text-transform: none; letter-spacing: 0; font-size: .8rem; color: var(--text); white-space: normal; width: 118px; min-width: 118px; line-height: 1.25; vertical-align: bottom; }
+.matrix thead tr.base-row th { top: var(--head-h, 52px); background: var(--accent-soft); font-weight: 400; vertical-align: top; }
+.matrix .pin { position: sticky; z-index: 1; }
+.matrix thead .pin { z-index: 3; }
+.matrix .pin-1 { left: 0; width: 160px; min-width: 160px; max-width: 160px; white-space: normal; background: var(--surface); font-weight: 600; }
+.matrix thead .pin-1 { background: var(--surface-2); }
+.matrix thead .base-row .pin-1 { background: var(--accent-soft); }
+.matrix .pin-2 { left: 160px; box-shadow: 3px 0 0 var(--nmb-border); }
+.matrix .nmb-col { background: var(--nmb); }
+.matrix thead .nmb-col { background: var(--nmb); font-weight: 700; }
+.matrix tr.group td { background: var(--accent-soft); padding-top: 6px; padding-bottom: 6px; }
+.matrix tr.group td.nmb-col { background: var(--nmb); }
+.matrix .rate { font-weight: 600; white-space: nowrap; font-size: .88rem; }
+.matrix .nmb-col .rate { font-size: .95rem; }
+.cmp { font-size: .74rem; font-weight: 600; white-space: nowrap; margin-top: 2px; }
+.cmp.good { color: var(--good); }
+.cmp.bad { color: var(--bad); }
+.cmp.even, .cmp.none { color: var(--muted); font-weight: 400; }
+.best { color: #d99a1a; margin-left: 4px; }
+.legend .best { margin: 0; }
+@media (max-width: 640px) {
+  .matrix .pin-1 { width: 110px; min-width: 110px; max-width: 110px; font-size: .82rem; }
+  .matrix .pin-2 { left: 110px; }
+  .matrix thead th { width: 100px; min-width: 100px; }
+}
+@media (max-width: 640px) { .top { position: static; } }

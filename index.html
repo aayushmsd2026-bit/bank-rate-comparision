@@ -23,7 +23,6 @@
     </div>
     <nav class="wrap tabs" role="tablist">
       <button role="tab" data-tab="summary" aria-selected="true">Summary</button>
-      <button role="tab" data-tab="base" aria-selected="false">Base rate</button>
       <button role="tab" data-tab="loan" aria-selected="false">Loans</button>
       <button role="tab" data-tab="deposit" aria-selected="false">Deposits</button>
     </nav>
@@ -44,48 +43,28 @@
       <div class="table-wrap"><table id="summary-table"></table></div>
     </section>
 
-    <section id="tab-base" class="panel" hidden>
-      <div class="panel-head">
-        <div>
-          <h2>Base rate</h2>
-          <p class="muted">Loan rate = base rate + premium. Sorted lowest first.</p>
-        </div>
-        <button class="btn" type="button" data-csv="base">Download CSV</button>
-      </div>
-      <div id="base-card" class="cards"></div>
-      <div class="table-wrap"><table id="base-table"></table></div>
-    </section>
-
     <section id="tab-loan" class="panel" hidden>
       <div class="panel-head">
         <div>
-          <h2>Loans</h2>
-          <p class="muted">Each bank's lowest and highest rate across all its products in this category, split into variable and fixed. Click a bank to see every product.</p>
+          <h2>Loans: every bank vs NMB</h2>
+          <p class="muted">Each cell shows the bank's lowest – highest rate across all its products of that type. The small line underneath compares the bank's <b>lowest</b> rate with NMB's. Scroll sideways to see all banks; NMB stays fixed on the left. Hover over a cell to see product names.</p>
         </div>
-        <div class="controls">
-          <select id="loan-select" aria-label="Loan type"></select>
-          <button class="btn" type="button" data-csv="loan">Download CSV</button>
-        </div>
+        <button class="btn" type="button" data-csv="loan">Download CSV</button>
       </div>
-      <div id="loan-card" class="cards"></div>
-      <div class="legend"><span class="good">Green</span> NMB is cheaper than that bank · <span class="bad">Red</span> that bank is cheaper than NMB</div>
-      <div class="table-wrap"><table id="loan-table"></table></div>
+      <div class="legend"><span class="good">Green</span> NMB is cheaper than that bank · <span class="bad">Red</span> that bank is cheaper than NMB · <span class="best">★</span> best rate in the market</div>
+      <div class="table-wrap matrix-wrap"><table id="loan-table" class="matrix"></table></div>
     </section>
 
     <section id="tab-deposit" class="panel" hidden>
       <div class="panel-head">
         <div>
-          <h2>Deposits</h2>
-          <p class="muted">Each bank's lowest and highest rate across all its products in this category. Click a bank to see every product.</p>
+          <h2>Deposits: every bank vs NMB</h2>
+          <p class="muted">Each cell shows the bank's lowest – highest rate across all its products of that type. The small line underneath compares the bank's <b>highest</b> rate with NMB's. Scroll sideways to see all banks; NMB stays fixed on the left. Hover over a cell to see product names.</p>
         </div>
-        <div class="controls">
-          <select id="deposit-select" aria-label="Deposit type"></select>
-          <button class="btn" type="button" data-csv="deposit">Download CSV</button>
-        </div>
+        <button class="btn" type="button" data-csv="deposit">Download CSV</button>
       </div>
-      <div id="deposit-card" class="cards"></div>
-      <div class="legend"><span class="good">Green</span> NMB pays more than that bank · <span class="bad">Red</span> that bank pays more than NMB</div>
-      <div class="table-wrap"><table id="deposit-table"></table></div>
+      <div class="legend"><span class="good">Green</span> NMB pays more than that bank · <span class="bad">Red</span> that bank pays more than NMB · <span class="best">★</span> best rate in the market</div>
+      <div class="table-wrap matrix-wrap"><table id="deposit-table" class="matrix"></table></div>
     </section>
   </main>
 

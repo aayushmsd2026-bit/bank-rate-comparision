@@ -14,9 +14,8 @@ A website comparing NMB Bank's base, loan and deposit rates with every commercia
 | Tab | Content |
 |---|---|
 | Summary | One row per product type: NMB's rate, NMB's rank, market lowest/highest (and which bank), market average, and NMB's gap to the average |
-| Base rate | All commercial banks' base rates, ranked, with the difference vs NMB |
-| Loans | Choose a loan type. Each bank's lowest–highest rate across all its products, split into **variable** and **fixed**, with the gap vs NMB. Click a bank to see each product and its premium over base rate |
-| Deposits | Choose a deposit type. Each bank's lowest–highest rate, with the gap vs NMB. Click a bank to see each product |
+| Loans | One grid: product types down the side (variable and fixed listed separately), banks across the top, base rates in the first row. NMB stays pinned on the left; scroll sideways for the other banks. Each cell shows the bank's lowest–highest rate and, underneath, how much higher or lower its lowest rate is than NMB's (green/red). ★ marks the best rate in the market. Hover a cell for product names |
+| Deposits | Same grid for deposit types, comparing each bank's highest rate with NMB's |
 
 Every table can be downloaded as CSV.
 

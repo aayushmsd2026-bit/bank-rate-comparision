@@ -6,7 +6,7 @@ const API = "https://admin.bankbyaj.com/api/v1/";
 const NMB = "NMB Bank";             // institute_code used by BankByaj
 const AUTO_REFRESH_MS = 15 * 60 * 1000;
 
-const state = { data: null, source: null, tab: "summary", loanKey: null, depositKey: null, sort: {} };
+const state = { data: null, source: null, tab: "summary", csv: {} };
 const $ = (id) => document.getElementById(id);
 
 // ---------- loading ----------
@@ -138,8 +138,6 @@ function prepare() {
   const mods = Object.values(d.categories).map((c) => c.last_modified_date).filter(Boolean).sort();
   model.modified = mods[mods.length - 1];
   state.model = model;
-  state.loanKey ||= model.loans[0]?.key;
-  state.depositKey ||= model.deposits[0]?.key;
 }
 
 // Ranks NMB among banks that have a value. ascending=true → 1 is lowest.
@@ -200,9 +198,8 @@ function render() {
   $("updated").textContent = `${when}${m.modified ? " · source updated " + fmtDate(m.modified) : ""}`;
 
   renderSummary();
-  renderBase();
-  renderCategory("loan");
-  renderCategory("deposit");
+  renderMatrix("loan");
+  renderMatrix("deposit");
 }
 
 function summaryRows() {
@@ -232,7 +229,6 @@ function summaryRows() {
 
 function renderSummary() {
   const rows = summaryRows();
-  state.csv = state.csv || {};
   const head = `<thead><tr><th>Product</th><th>NMB rate</th><th class="num">NMB rank</th><th>Market lowest</th><th>Market highest</th><th class="num">Average</th><th class="num">NMB vs avg</th></tr></thead>`;
   let body = "", group = null;
   const csv = [["Group", "Product", "NMB rate", "NMB rank", "Banks compared", "Market lowest", "Lowest bank(s)", "Market highest", "Highest bank(s)", "Average", "NMB minus average (pp)"]];
@@ -263,155 +259,100 @@ function renderSummary() {
   state.csv.summary = csv;
 }
 
-function renderBase() {
-  const m = state.model;
-  const list = m.banks.map((b) => ({ code: b.code, rate: m.base[b.code] ?? null }))
-    .filter((b) => b.rate !== null).sort((a, b) => a.rate - b.rate);
-  const s = standing(m.base, true);
-  const nmb = m.base[NMB];
-  const max = Math.max(...list.map((b) => b.rate));
-  $("base-card").innerHTML = s ? cards([
-    ["NMB base rate", pct(nmb), s.rank ? `${ordinal(s.rank)} lowest of ${s.n}` : ""],
-    ["Lowest", pct(s.min), s.minBanks.map(bankLabel).join(", ")],
-    ["Highest", pct(s.max), s.maxBanks.map(bankLabel).join(", ")],
-    ["Average", pct(s.avg), nmb !== undefined ? `NMB is ${Math.abs(nmb - s.avg).toFixed(2)} pp ${nmb > s.avg ? "above" : "below"}` : ""],
-  ]) : "";
-  let body = "";
-  list.forEach((b, i) => {
-    body += `<tr class="${b.code === NMB ? "nmb" : ""}">
-      <td class="num">${i + 1}</td><td>${bankLabel(b.code)}</td><td class="num"><b>${pct(b.rate)}</b></td>
-      <td class="num">${b.code === NMB ? '<span class="dim">NMB</span>' : deltaBadge(b.rate - nmb, true)}</td>
-      <td style="width:35%"><div class="bar ${b.code === NMB ? "nmb" : ""}" style="width:${(b.rate / max * 100).toFixed(1)}%"></div></td>
-    </tr>`;
-  });
-  $("base-table").innerHTML = `<thead><tr><th class="num">#</th><th>Bank</th><th class="num">Base rate</th><th class="num">vs NMB</th><th></th></tr></thead><tbody>${body}</tbody>`;
-  state.csv.base = [["Rank", "Bank", "Base rate", "Difference vs NMB (pp)"],
-    ...list.map((b, i) => [i + 1, m.nameOf[b.code], b.rate.toFixed(2), (b.rate - nmb).toFixed(2)])];
-}
-
-function cards(items) {
-  return items.map(([label, value, note]) =>
-    `<div class="card"><div class="label">${esc(label)}</div><div class="value">${value}</div><div class="note">${note || ""}</div></div>`).join("");
-}
-
-function fillSelect(type) {
-  const sel = $(type + "-select");
-  const cats = type === "loan" ? state.model.loans : state.model.deposits;
-  const current = type === "loan" ? state.loanKey : state.depositKey;
-  sel.innerHTML = cats.map((c) =>
-    `<option value="${esc(c.key)}" ${c.key === current ? "selected" : ""}>${esc(c.title)}${c.rows[NMB] ? "" : " (no NMB product)"}</option>`).join("");
-}
-
-function renderCategory(type) {
-  fillSelect(type);
+// One matrix per section: rows = product types, columns = banks.
+// Product and NMB columns stay pinned on the left; bank names and the base-rate
+// row stay pinned on top. Each cell compares that bank with NMB.
+function renderMatrix(type) {
   const m = state.model;
   const isLoan = type === "loan";
-  const key = isLoan ? state.loanKey : state.depositKey;
-  const cat = (isLoan ? m.loans : m.deposits).find((c) => c.key === key);
-  if (!cat) return;
-  const nmb = cat.rows[NMB];
-  const rows = Object.values(cat.rows);
+  const others = m.banks.filter((b) => b.code !== NMB).sort((a, b) => a.name.localeCompare(b.name));
+  const cols = [m.banks.find((b) => b.code === NMB), ...others].filter(Boolean);
 
-  // Cards
-  const items = [];
+  // Rows: loans split into variable/fixed; compare on lowest rate for loans,
+  // highest rate for deposits.
+  const rows = [];
   if (isLoan) {
     for (const kind of ["variable", "fixed"]) {
-      const values = Object.fromEntries(rows.filter((r) => hasRange(r[kind])).map((r) => [r.code, r[kind].lo]));
-      const s = standing(values, true);
-      if (!s) continue;
-      const label = kind === "variable" ? "Variable" : "Fixed";
-      items.push([`NMB · ${label}`, range(nmb?.[kind]), s.rank ? `${ordinal(s.rank)} cheapest of ${s.n} (by lowest rate)` : `NMB has no ${kind}-rate product`]);
-      items.push([`Market · ${label}`, `${pct(s.min)} – ${pct(Math.max(...rows.filter((r) => hasRange(r[kind])).map((r) => r[kind].hi)))}`,
-        `Cheapest: ${s.minBanks.map(bankLabel).join(", ")} · avg from ${pct(s.avg)}`]);
+      for (const c of m.loans) {
+        const cells = {};
+        for (const r of Object.values(c.rows)) {
+          if (!hasRange(r[kind])) continue;
+          cells[r.code] = { range: r[kind], value: r[kind].lo, products: r.products.filter((p) => p.fixed === (kind === "fixed")) };
+        }
+        if (Object.keys(cells).length) rows.push({ group: kind === "variable" ? "Variable rate loans" : "Fixed rate loans", title: c.title, cells });
+      }
     }
   } else {
-    const values = Object.fromEntries(rows.map((r) => [r.code, r.all.hi]));
-    const s = standing(values, false);
-    if (s) {
-      items.push(["NMB", range(nmb?.all), s.rank ? `${ordinal(s.rank)} highest of ${s.n} (by top rate)` : "NMB has no product here"]);
-      items.push(["Market top rate", pct(s.max), s.maxBanks.map(bankLabel).join(", ")]);
-      items.push(["Average top rate", pct(s.avg), s.nmb !== null ? `NMB is ${Math.abs(s.nmb - s.avg).toFixed(2)} pp ${s.nmb >= s.avg ? "above" : "below"}` : ""]);
+    for (const c of m.deposits) {
+      const cells = {};
+      for (const r of Object.values(c.rows)) cells[r.code] = { range: r.all, value: r.all.hi, products: r.products };
+      rows.push({ group: "Deposits", title: c.title, cells });
     }
   }
-  $(type + "-card").innerHTML = cards(items);
 
-  // Table
-  const sortState = state.sort[type] ||= { key: isLoan ? "variable" : "all", dir: isLoan ? 1 : -1 };
-  const sortVal = (r) => {
-    switch (sortState.key) {
-      case "bank": return m.nameOf[r.code] || r.code;
-      case "base": return m.base[r.code] ?? Infinity;
-      case "variable": return hasRange(r.variable) ? r.variable.lo : null;
-      case "fixed": return hasRange(r.fixed) ? r.fixed.lo : null;
-      case "all": return r.all.hi;
-    }
-  };
-  rows.sort((a, b) => {
-    const va = sortVal(a), vb = sortVal(b);
-    if (va === null && vb === null) return 0;
-    if (va === null) return 1;            // banks without that rate go last
-    if (vb === null) return -1;
-    return (typeof va === "string" ? va.localeCompare(vb) : va - vb) * sortState.dir;
-  });
+  const lowerIsBetter = isLoan;
+  const nmbBase = m.base[NMB];
 
-  const th = (k, label, cls = "") => {
-    const arrow = sortState.key === k ? (sortState.dir === 1 ? " ▲" : " ▼") : "";
-    return `<th class="sortable ${cls}" data-sort="${k}" data-type="${type}">${label}<span class="arrow">${arrow}</span></th>`;
-  };
-  const head = isLoan
-    ? `<thead><tr><th class="num">#</th>${th("bank", "Bank")}${th("base", "Base rate", "num")}${th("variable", "Variable rate")}<th class="num">vs NMB</th>${th("fixed", "Fixed rate")}<th class="num">vs NMB</th><th class="num">Products</th></tr></thead>`
-    : `<thead><tr><th class="num">#</th>${th("bank", "Bank")}${th("all", "Rate (lowest – highest)")}<th class="num">Top rate vs NMB</th><th class="num">Products</th></tr></thead>`;
-
-  const cols = isLoan ? 8 : 5;
-  let body = "";
-  rows.forEach((r, i) => {
-    const me = r.code === NMB;
-    const cells = isLoan
-      ? `<td class="num">${pct(m.base[r.code])}</td>
-         <td>${range(r.variable)}</td>
-         <td class="num">${me ? '<span class="dim">NMB</span>' : deltaBadge(hasRange(r.variable) && hasRange(nmb?.variable) ? r.variable.lo - nmb.variable.lo : null, true)}</td>
-         <td>${range(r.fixed)}</td>
-         <td class="num">${me ? '<span class="dim">NMB</span>' : deltaBadge(hasRange(r.fixed) && hasRange(nmb?.fixed) ? r.fixed.lo - nmb.fixed.lo : null, true)}</td>`
-      : `<td>${range(r.all)}</td>
-         <td class="num">${me ? '<span class="dim">NMB</span>' : deltaBadge(nmb ? r.all.hi - nmb.all.hi : null, false)}</td>`;
-    body += `<tr class="bank-row ${me ? "nmb" : ""}" data-detail="${type}-${i}">
-      <td class="num">${i + 1}</td>
-      <td><span class="caret">›</span>${bankLabel(r.code)}</td>
-      ${cells}
-      <td class="num">${r.products.length}</td>
-    </tr>
-    <tr class="detail" id="${type}-${i}" hidden><td colspan="${cols}">${productTable(r, isLoan)}</td></tr>`;
-  });
-  $(type + "-table").innerHTML = head + `<tbody>${body}</tbody>`;
-
-  const csv = isLoan
-    ? [["Bank", "Product", "Rate type", "Rate from", "Rate to", "Offer rate", "Base rate", "Premium from", "Premium to", "Processing fee", "Max tenure"]]
-    : [["Bank", "Product", "Rate from", "Rate to", "Minimum balance", "Tenure"]];
-  for (const r of rows) for (const p of r.products) {
-    const b = m.base[r.code];
-    csv.push(isLoan
-      ? [m.nameOf[r.code], p.name, p.fixed ? "Fixed" : "Variable", p.rate.lo.toFixed(2), p.rate.hi.toFixed(2), p.rate.offer ? "Yes" : "",
-        b?.toFixed(2) ?? "", b !== undefined ? (p.rate.lo - b).toFixed(2) : "", b !== undefined ? (p.rate.hi - b).toFixed(2) : "", p.processing_fee || "", p.max_tenure || ""]
-      : [m.nameOf[r.code], p.name, p.rate.lo.toFixed(2), p.rate.hi.toFixed(2), p.minimum_balance || "", p.max_tenure || ""]);
+  let head = `<thead><tr><th class="pin pin-1">Product</th>`;
+  for (const b of cols) head += `<th class="${b.code === NMB ? "pin pin-2 nmb-col" : "bank-col"}">${bankLabel(b.code)}</th>`;
+  head += `</tr><tr class="base-row"><th class="pin pin-1">Base rate</th>`;
+  for (const b of cols) {
+    const v = m.base[b.code];
+    if (b.code === NMB) head += `<th class="pin pin-2 nmb-col"><div class="rate">${pct(v)}</div></th>`;
+    else head += `<th><div class="rate">${pct(v)}</div>${cmp(v, nmbBase, true)}</th>`;
   }
+  head += `</tr></thead>`;
+
+  let body = "", group = null;
+  const csv = [["Section", "Product", ...cols.map((b) => b.name), ...cols.filter((b) => b.code !== NMB).map((b) => b.name + " vs NMB")]];
+  csv.push(["", "Base rate", ...cols.map((b) => m.base[b.code]?.toFixed(2) ?? ""), ...cols.filter((b) => b.code !== NMB).map((b) => m.base[b.code] !== undefined && nmbBase !== undefined ? (m.base[b.code] - nmbBase).toFixed(2) : "")]);
+
+  for (const row of rows) {
+    if (row.group !== group) {
+      group = row.group;
+      body += `<tr class="group"><td class="pin pin-1">${esc(group)}</td><td class="pin pin-2 nmb-col"></td><td colspan="${cols.length - 1}"></td></tr>`;
+    }
+    const vals = Object.values(row.cells).map((c) => c.value);
+    const best = lowerIsBetter ? Math.min(...vals) : Math.max(...vals);
+    const nmb = row.cells[NMB];
+    body += `<tr><td class="pin pin-1">${esc(row.title)}</td>`;
+    for (const b of cols) {
+      const c = row.cells[b.code];
+      const me = b.code === NMB;
+      const cls = me ? "pin pin-2 nmb-col" : "";
+      if (!c) { body += `<td class="${cls}"><span class="dim">—</span></td>`; continue; }
+      const tip = c.products.map((p) => `${p.name}: ${p.rate.lo === p.rate.hi ? pct(p.rate.lo) : pct(p.rate.lo) + " – " + pct(p.rate.hi)}`).join("\n");
+      const star = Math.abs(c.value - best) < 0.005 ? `<span class="best" title="Best rate in market">★</span>` : "";
+      body += `<td class="${cls}" title="${esc(tip)}"><div class="rate">${shortRange(c.range)}${star}</div>${me ? "" : cmp(c.value, nmb?.value, lowerIsBetter)}</td>`;
+    }
+    body += `</tr>`;
+    csv.push([row.group, row.title, ...cols.map((b) => row.cells[b.code] ? shortRange(row.cells[b.code].range) : ""),
+      ...cols.filter((b) => b.code !== NMB).map((b) => row.cells[b.code] && nmb ? (row.cells[b.code].value - nmb.value).toFixed(2) : "")]);
+  }
+  const table = $(type + "-table");
+  table.innerHTML = head + `<tbody>${body}</tbody>`;
   state.csv[type] = csv;
+  pinBaseRow(table);
 }
 
-function productTable(r, isLoan) {
-  const base = state.model.base[r.code];
-  const rows = r.products.map((p) => {
-    const rate = p.rate.lo === p.rate.hi ? pct(p.rate.lo) : `${pct(p.rate.lo)} – ${pct(p.rate.hi)}`;
-    const tags = (p.fixed ? '<span class="tag fixed">Fixed</span>' : "") + (p.rate.offer ? '<span class="tag">Offer</span>' : "");
-    if (isLoan) {
-      const prem = base === undefined ? "—"
-        : p.rate.lo === p.rate.hi ? `${(p.rate.lo - base).toFixed(2)}` : `${(p.rate.lo - base).toFixed(2)} – ${(p.rate.hi - base).toFixed(2)}`;
-      return `<tr><td>${esc(p.name)}${tags}</td><td>${rate}</td><td class="num">${prem}</td><td>${esc(p.processing_fee || "—")}</td><td>${esc(p.max_tenure || "—")}</td></tr>`;
-    }
-    return `<tr><td>${esc(p.name)}</td><td>${rate}</td><td>${esc(p.minimum_balance || "0")}</td><td>${esc(p.max_tenure || "—")}</td></tr>`;
-  }).join("");
-  return isLoan
-    ? `<table><thead><tr><th>Product</th><th>Rate</th><th class="num">Premium over base (pp)</th><th>Processing fee</th><th>Max tenure</th></tr></thead><tbody>${rows}</tbody></table>`
-    : `<table><thead><tr><th>Product</th><th>Rate</th><th>Minimum balance</th><th>Tenure</th></tr></thead><tbody>${rows}</tbody></table>`;
+// The base-rate row sticks just under the bank-name row; its offset depends on
+// how many lines the bank names wrap to. Hidden tabs measure 0, so redo on show.
+function pinBaseRow(table) {
+  const h = table.tHead?.rows[0]?.offsetHeight;
+  if (h) table.style.setProperty("--head-h", h + "px");
+}
+
+function shortRange(r) {
+  return r.lo === r.hi ? pct(r.lo) : `${r.lo.toFixed(2)} – ${pct(r.hi)}`;
+}
+
+// Small "▲ 0.25 higher" / "▼ 0.25 lower" vs NMB. Green when NMB is the better deal.
+function cmp(v, nmb, lowerIsBetter) {
+  if (v === undefined || v === null || nmb === undefined || nmb === null) return `<div class="cmp none">no NMB product</div>`;
+  const d = v - nmb;
+  if (Math.abs(d) < 0.005) return `<div class="cmp even">same as NMB</div>`;
+  const nmbBetter = lowerIsBetter ? d > 0 : d < 0;
+  return `<div class="cmp ${nmbBetter ? "good" : "bad"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(2)} ${d > 0 ? "higher" : "lower"}</div>`;
 }
 
 // ---------- CSV ----------
@@ -423,7 +364,7 @@ function downloadCsv(name) {
     const s = String(v ?? "");
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join(",")).join("\n");
-  const label = name === "loan" ? state.loanKey : name === "deposit" ? state.depositKey : name;
+  const label = name;
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv" }));
   a.download = `nmb-comparison-${label}-${new Date().toISOString().slice(0, 10)}.csv`;
@@ -438,6 +379,8 @@ function showTab(tab) {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "tab-" + tab));
   history.replaceState(null, "", "#" + tab);
+  const t = $(tab + "-table");
+  if (t) pinBaseRow(t);
 }
 
 document.querySelector(".tabs").addEventListener("click", (e) => {
@@ -445,31 +388,13 @@ document.querySelector(".tabs").addEventListener("click", (e) => {
   if (b) showTab(b.dataset.tab);
 });
 $("refresh").addEventListener("click", load);
-$("loan-select").addEventListener("change", (e) => { state.loanKey = e.target.value; renderCategory("loan"); });
-$("deposit-select").addEventListener("change", (e) => { state.depositKey = e.target.value; renderCategory("deposit"); });
 
 document.addEventListener("click", (e) => {
   const csvBtn = e.target.closest("[data-csv]");
   if (csvBtn) return downloadCsv(csvBtn.dataset.csv);
-
-  const sortTh = e.target.closest("th[data-sort]");
-  if (sortTh) {
-    const type = sortTh.dataset.type, k = sortTh.dataset.sort;
-    const s = state.sort[type];
-    if (s.key === k) s.dir *= -1;
-    else { s.key = k; s.dir = k === "all" ? -1 : 1; }
-    return renderCategory(type);
-  }
-
-  const row = e.target.closest("tr.bank-row");
-  if (row) {
-    const detail = $(row.dataset.detail);
-    detail.hidden = !detail.hidden;
-    row.classList.toggle("open", !detail.hidden);
-  }
 });
 
 const initial = location.hash.slice(1);
-if (["summary", "base", "loan", "deposit"].includes(initial)) showTab(initial);
+if (["summary", "loan", "deposit"].includes(initial)) showTab(initial);
 load();
 setInterval(() => { if (!document.hidden) load(); }, AUTO_REFRESH_MS);
