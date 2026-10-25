@@ -32,4 +32,4 @@ Branding (colours, fonts, logo) follows [nmb.com.np](https://www.nmb.com.np/en);
 
 ## Files
 
-`index.html`, `style.css` and `app.js` are the whole site (no build step). `scripts/sync.mjs` writes the backup.
+`index.html`, `style.css` and `app.js` are the whole site (no build step). When changing `style.css` or `app.js`, bump the `?v=` number on their links in `index.html` so browsers don't mix a new page with old cached files. `scripts/sync.mjs` writes the backup.
