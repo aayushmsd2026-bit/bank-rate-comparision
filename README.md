@@ -15,7 +15,7 @@ A website comparing NMB Bank's base, loan and deposit rates with every commercia
 |---|---|
 | Summary | One row per product type: NMB's rate, NMB's rank, market lowest/highest (and which bank), market average, and NMB's gap to the average |
 | Loans | One grid: product types down the side (variable and fixed listed separately), banks across the top, base rates in the first row. NMB stays pinned on the left; scroll sideways for the other banks. Each cell shows the bank's lowest–highest rate and, underneath, how much higher or lower its lowest rate is than NMB's (green/red). ★ marks the best rate in the market. Hover a cell for product names |
-| Deposits | Same grid for deposit types, comparing each bank's highest rate with NMB's |
+| Deposits | Same grid for deposits. **Fixed Deposit** and **Institutional FD** are shown period by period (3 months, 6 months, 1 year, 2, 3, 5 and 10 years). Other deposit types compare each bank's highest rate with NMB's |
 
 Every table can be downloaded as CSV.
 
@@ -23,6 +23,7 @@ Every table can be downloaded as CSV.
 
 - **Commercial banks** = institutions BankByaj lists as Class A.
 - **Fixed vs variable**: products with "Fixed" in their name are fixed rate; all others are variable.
+- **Fixed deposit periods**: read from the product name, e.g. `Fixed Deposit-3Mto<6M`, `FD->1Yto2Y`, `Fixed Deposit-5Y&above`. A range includes its lower end unless it starts with `>`/`Above`, and its upper end unless it has `<`. Where a bank's ranges overlap at a boundary, the higher rate is used.
 - **Offer rates**: where a bank lists a special offer rate, that rate is used.
 - **Ranking**: loans are ranked by each bank's lowest rate (1 = cheapest); deposits by each bank's highest rate (1 = pays the most). Tied banks share a rank.
 - **Colours**: green = NMB is more attractive to customers (cheaper loan, higher deposit rate); red = the other bank is.

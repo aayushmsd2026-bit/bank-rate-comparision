@@ -97,6 +97,50 @@ function parseRate(p) {
 
 const isFixed = (name) => /fixed/i.test(name);
 
+// Fixed deposit names carry their period, e.g. "Fixed Deposit-3Mto<6M",
+// "FD->1Yto2Y", "Fixed Deposit-5Y&above", "FD-Above10Y". Returns the span in
+// months as { lo, loInc, hi, hiInc }, or null when the name has no period.
+const UNIT = { M: 1, Y: 12 };
+function parseTenure(name) {
+  const tail = (name.includes("-") ? name.slice(name.indexOf("-") + 1) : name).replace(/\s+/g, "");
+  const m = tail.match(/^(>|Above)?(\d+(?:\.\d+)?)([MY])(?:(&above)|to(<)?(\d+(?:\.\d+)?)([MY])|upto(\d+(?:\.\d+)?)([MY]))?$/i);
+  if (!m) return null;
+  const [, gt, a, au, andAbove, lt, b, bu, c, cu] = m;
+  const lo = +a * UNIT[au.toUpperCase()];
+  if (andAbove) return { lo, loInc: true, hi: Infinity, hiInc: false };
+  if (b) return { lo, loInc: !gt, hi: +b * UNIT[bu.toUpperCase()], hiInc: !lt };
+  if (c) return { lo, loInc: !gt, hi: +c * UNIT[cu.toUpperCase()], hiInc: true };
+  if (gt) return { lo, loInc: false, hi: Infinity, hiInc: false };
+  return { lo, loInc: true, hi: lo, hiInc: true };
+}
+const covers = (t, m) => (m > t.lo || (t.loInc && m === t.lo)) && (m < t.hi || (t.hiInc && m === t.hi));
+
+const PERIODS = [
+  [3, "3 months"], [6, "6 months"], [12, "1 year"], [24, "2 years"],
+  [36, "3 years"], [60, "5 years"], [120, "10 years"],
+];
+
+// For deposit categories whose products are named by period, work out each
+// bank's rate for every standard period. Where a bank's ranges overlap at a
+// boundary, the higher rate wins (rates rise with tenure, so this picks the
+// band that starts at that period).
+function buildPeriods(cat) {
+  const all = Object.values(cat.rows).flatMap((r) => r.products);
+  const parsed = all.filter((p) => (p.tenure = parseTenure(p.name)));
+  if (!all.length || parsed.length < all.length * 0.8) return null;
+  return PERIODS.map(([months, label]) => {
+    const rows = {};
+    for (const r of Object.values(cat.rows)) {
+      const hits = r.products.filter((p) => p.tenure && covers(p.tenure, months));
+      if (!hits.length) continue;
+      const top = Math.max(...hits.map((p) => p.rate.hi));
+      const used = hits.filter((p) => p.rate.hi === top);
+      rows[r.code] = { code: r.code, all: { lo: top, hi: top, count: 1 }, products: used };
+    }
+    return { months, label, rows };
+  }).filter((p) => Object.keys(p.rows).length);
+}
+
 function emptyRange() { return { lo: Infinity, hi: -Infinity, count: 0 }; }
 function addRange(r, rate) { r.lo = Math.min(r.lo, rate.lo); r.hi = Math.max(r.hi, rate.hi); r.count++; }
 const hasRange = (r) => r && r.count > 0;
@@ -133,7 +177,7 @@ function prepare() {
     nameOf: Object.fromEntries(banks.map((b) => [b.code, b.name])),
     base,
     loans: build(d.loanCategories, "loan"),
-    deposits: build(d.depositCategories, "deposit"),
+    deposits: build(d.depositCategories, "deposit").map((c) => ({ ...c, periods: buildPeriods(c) })),
   };
   const mods = Object.values(d.categories).map((c) => c.last_modified_date).filter(Boolean).sort();
   model.modified = mods[mods.length - 1];
@@ -213,10 +257,17 @@ function summaryRows() {
         () => range(nmbRow?.[kind]));
     }
   }
-  for (const c of m.deposits) {
+  for (const c of m.deposits.filter((c) => c.periods)) {
+    for (const p of c.periods) {
+      const values = {};
+      for (const r of Object.values(p.rows)) values[r.code] = r.all.hi;
+      push(`${c.title} · by period`, p.label, values, false, () => range(p.rows[NMB]?.all));
+    }
+  }
+  for (const c of m.deposits.filter((c) => !c.periods)) {
     const values = {};
     for (const r of Object.values(c.rows)) values[r.code] = r.all.hi;
-    push("Deposits", c.title, values, false, () => range(c.rows[NMB]?.all));
+    push("Other deposits", c.title, values, false, () => range(c.rows[NMB]?.all));
   }
   return rows;
 }
@@ -225,11 +276,12 @@ function renderKpis(rows) {
   const base = rows.find((r) => r.group === "Base rate")?.s;
   const offered = (pred) => rows.filter((r) => pred(r) && r.s.nmb !== null);
   const loans = offered((r) => r.group.startsWith("Loans"));
-  const deps = offered((r) => r.group === "Deposits");
+  const deps = offered((r) => r.group.includes("eposit"));
   const loanWins = loans.filter((r) => r.s.nmb <= r.s.avg + 0.005);
   const depWins = deps.filter((r) => r.s.nmb >= r.s.avg - 0.005);
   const leads = rows.filter((r) => r.group !== "Base rate" && r.s.rank === 1);
-  const leadNames = leads.map((r) => r.label + (r.group.includes("fixed") ? " (fixed)" : ""));
+  const leadNames = leads.map((r) => r.group.includes("by period") ? `${r.group.split(" · ")[0]} ${r.label}`
+    : r.label + (r.group.includes("fixed") ? " (fixed)" : ""));
 
   const kpi = (label, value, note, cls = "") =>
     `<div class="kpi ${cls}"><div class="k-label">${label}</div><div class="k-value">${value}</div><div class="k-note">${note}</div></div>`;
@@ -296,10 +348,13 @@ function renderMatrix(type) {
       }
     }
   } else {
-    for (const c of m.deposits) {
-      const cells = {};
-      for (const r of Object.values(c.rows)) cells[r.code] = { range: r.all, value: r.all.hi, products: r.products };
-      rows.push({ group: null, title: c.title, cells });
+    const cellsOf = (rowsByBank) => Object.fromEntries(Object.values(rowsByBank).map((r) =>
+      [r.code, { range: r.all, value: r.all.hi, products: r.products }]));
+    for (const c of m.deposits.filter((c) => c.periods)) {
+      for (const p of c.periods) rows.push({ group: `${c.title} by period`, title: p.label, cells: cellsOf(p.rows) });
+    }
+    for (const c of m.deposits.filter((c) => !c.periods)) {
+      rows.push({ group: "Other deposits", title: c.title, cells: cellsOf(c.rows) });
     }
   }
 
@@ -323,7 +378,7 @@ function renderMatrix(type) {
   csv.push(["", "Base rate", ...cols.map((b) => m.base[b.code]?.toFixed(2) ?? ""), ...cols.filter((b) => b.code !== NMB).map((b) => m.base[b.code] !== undefined && nmbBase !== undefined ? (m.base[b.code] - nmbBase).toFixed(2) : "")]);
 
   for (const row of rows) {
-    if (row.group && row.group !== group) {
+    if (row.group !== group) {
       group = row.group;
       body += `<tr class="group"><td class="pin pin-1">${esc(group)}</td><td class="pin pin-2 nmb-col"></td><td colspan="${cols.length - 1}"></td></tr>`;
     }
@@ -341,7 +396,7 @@ function renderMatrix(type) {
       body += `<td class="${cls}" title="${esc(tip)}"><div class="rate">${rangeHtml(c.range)}${bestTag}</div>${me ? "" : cmp(c.value, nmb?.value, lowerIsBetter)}</td>`;
     }
     body += `</tr>`;
-    csv.push([row.group || "Deposits", row.title, ...cols.map((b) => row.cells[b.code] ? shortRange(row.cells[b.code].range) : ""),
+    csv.push([row.group, row.title, ...cols.map((b) => row.cells[b.code] ? shortRange(row.cells[b.code].range) : ""),
       ...cols.filter((b) => b.code !== NMB).map((b) => row.cells[b.code] && nmb ? (row.cells[b.code].value - nmb.value).toFixed(2) : "")]);
   }
   $(type + "-table").innerHTML = head + `<tbody>${body}</tbody>`;
