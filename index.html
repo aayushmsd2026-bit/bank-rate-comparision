@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NMB Rate Comparison</title>
+  <meta name="description" content="NMB Bank's base, loan and deposit rates compared with every commercial bank in Nepal, synced live from BankByaj.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%231f4e8c'/><path d='M8 22V12m8 10V8m8 14v-6' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <div>
+        <h1>NMB Bank vs Commercial Banks</h1>
+        <p class="sub">Base, loan and deposit rates across Nepal's <span id="bank-count">20</span> commercial banks</p>
+      </div>
+      <div class="status">
+        <span id="source-badge" class="badge">Loading…</span>
+        <span id="updated" class="muted"></span>
+        <button id="refresh" class="btn" type="button">Refresh</button>
+      </div>
+    </div>
+    <nav class="wrap tabs" role="tablist">
+      <button role="tab" data-tab="summary" aria-selected="true">Summary</button>
+      <button role="tab" data-tab="base" aria-selected="false">Base rate</button>
+      <button role="tab" data-tab="loan" aria-selected="false">Loans</button>
+      <button role="tab" data-tab="deposit" aria-selected="false">Deposits</button>
+    </nav>
+  </header>
+
+  <main class="wrap">
+    <div id="error" class="notice" hidden></div>
+
+    <section id="tab-summary" class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Where NMB stands</h2>
+          <p class="muted">Loans are ranked by each bank's <b>lowest</b> rate (1 = cheapest). Deposits are ranked by each bank's <b>highest</b> rate (1 = pays most). Gaps are in percentage points.</p>
+        </div>
+        <button class="btn" type="button" data-csv="summary">Download CSV</button>
+      </div>
+      <div class="legend"><span class="good">Green</span> NMB is more attractive to customers than the market average · <span class="bad">Red</span> NMB is less attractive</div>
+      <div class="table-wrap"><table id="summary-table"></table></div>
+    </section>
+
+    <section id="tab-base" class="panel" hidden>
+      <div class="panel-head">
+        <div>
+          <h2>Base rate</h2>
+          <p class="muted">Loan rate = base rate + premium. Sorted lowest first.</p>
+        </div>
+        <button class="btn" type="button" data-csv="base">Download CSV</button>
+      </div>
+      <div id="base-card" class="cards"></div>
+      <div class="table-wrap"><table id="base-table"></table></div>
+    </section>
+
+    <section id="tab-loan" class="panel" hidden>
+      <div class="panel-head">
+        <div>
+          <h2>Loans</h2>
+          <p class="muted">Each bank's lowest and highest rate across all its products in this category, split into variable and fixed. Click a bank to see every product.</p>
+        </div>
+        <div class="controls">
+          <select id="loan-select" aria-label="Loan type"></select>
+          <button class="btn" type="button" data-csv="loan">Download CSV</button>
+        </div>
+      </div>
+      <div id="loan-card" class="cards"></div>
+      <div class="legend"><span class="good">Green</span> NMB is cheaper than that bank · <span class="bad">Red</span> that bank is cheaper than NMB</div>
+      <div class="table-wrap"><table id="loan-table"></table></div>
+    </section>
+
+    <section id="tab-deposit" class="panel" hidden>
+      <div class="panel-head">
+        <div>
+          <h2>Deposits</h2>
+          <p class="muted">Each bank's lowest and highest rate across all its products in this category. Click a bank to see every product.</p>
+        </div>
+        <div class="controls">
+          <select id="deposit-select" aria-label="Deposit type"></select>
+          <button class="btn" type="button" data-csv="deposit">Download CSV</button>
+        </div>
+      </div>
+      <div id="deposit-card" class="cards"></div>
+      <div class="legend"><span class="good">Green</span> NMB pays more than that bank · <span class="bad">Red</span> that bank pays more than NMB</div>
+      <div class="table-wrap"><table id="deposit-table"></table></div>
+    </section>
+  </main>
+
+  <footer class="wrap foot muted">
+    Data: <a href="https://bankbyaj.com" target="_blank" rel="noopener">bankbyaj.com</a>, read live each time the page opens. A backup copy is saved hourly in case the source is down.
+    Commercial banks = Class A institutions. Products with "Fixed" in their name count as fixed rate; all others are variable. Where a bank lists a special offer rate, that rate is used.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

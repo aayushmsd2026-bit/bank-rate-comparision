@@ -1,0 +1,38 @@
+name: Sync rates backup
+
+# Saves an hourly copy of the BankByaj data to data/snapshot.json.
+# The site reads the API live; this copy is only used if the API is down.
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/sync.mjs
+      - name: Commit if changed
+        run: |
+          # fetched_at changes every run; only commit when the rates themselves changed
+          if git diff --quiet -- data/snapshot.json; then exit 0; fi
+          if [ "$(git show HEAD:data/snapshot.json | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const j=JSON.parse(s);delete j.fetched_at;console.log(JSON.stringify(j))})')" = \
+               "$(node -e 'const j=require("./data/snapshot.json");delete j.fetched_at;console.log(JSON.stringify(j))')" ]; then
+            echo "Rates unchanged"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898388+github-actions[bot]@users.noreply.github.com"
+          git add data/snapshot.json
+          git commit -m "Update rates backup"
+          git push
