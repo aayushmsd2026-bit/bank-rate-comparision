@@ -201,25 +201,92 @@ function standing(values, ascending) {
   };
 }
 
+// ---------- structure ----------
+
+// Products are grouped the way a bank's ALCO / pricing committee reads them.
+// Keys are BankByaj category url_keys; anything unlisted falls into the last group.
+const LOAN_SEGMENTS = [
+  ["Home & property", ["home-loan-nepali-banks", "flexi-mortgage"]],
+  ["Vehicle", ["auto-loan", "hire_purchase", "bike"]],
+  ["Personal", ["personal-loan", "education-loan", "professional_loan", "pension-loan", "foreignworkers"]],
+  ["Asset-backed", ["share-margin-loan", "gold-silver"]],
+  ["Business & priority sector", ["business-loan", "term-loan", "agro loan", "deprived-dector"]],
+  ["Other lending", null],
+];
+const DEPOSIT_SEGMENTS = [
+  ["Other term deposits", ["remitfd", "recurring-deposit"]],
+  ["Savings", ["current-savings", "salary SAVINGS", "women-savings", "senior-citizens", "pensioner",
+    "student savings", "bal-bachat", "remittance-saving", "socialsecurity", "shreholder-savings"]],
+  ["Foreign currency", ["foreign-currency", "dollar_savings"]],
+  ["Call & other", null],
+];
+
+function bySegment(cats, segments) {
+  const used = new Set();
+  const out = [];
+  for (const [name, keys] of segments) {
+    const list = keys ? keys.map((k) => cats.find((c) => c.key === k)).filter(Boolean) : cats.filter((c) => !used.has(c.key));
+    list.forEach((c) => used.add(c.key));
+    if (list.length) out.push([name, list]);
+  }
+  return out;
+}
+
+// Every comparable line (a product × variant) with its per-bank cells and NMB's standing.
+// Loans compare on each bank's lowest rate; deposits on each bank's highest rate.
+function buildRows() {
+  const m = state.model;
+  const rows = [];
+  const add = (section, segment, product, variant, cellList) => {
+    const cells = {};
+    for (const c of cellList) cells[c.code] = c;
+    if (!cellList.length) return;
+    const lowerIsBetter = section === "loan";
+    const values = Object.fromEntries(cellList.map((c) => [c.code, c.value]));
+    rows.push({ section, segment, product, variant, cells, lowerIsBetter, s: standing(values, lowerIsBetter) });
+  };
+
+  for (const [segment, cats] of bySegment(m.loans, LOAN_SEGMENTS)) {
+    for (const c of cats) {
+      for (const kind of ["variable", "fixed"]) {
+        add("loan", segment, c.title, kind === "fixed" ? "Fixed" : "Variable",
+          Object.values(c.rows).filter((r) => hasRange(r[kind])).map((r) => ({
+            code: r.code, range: r[kind], value: r[kind].lo, products: r.products.filter((p) => p.fixed === (kind === "fixed")),
+          })));
+      }
+    }
+  }
+
+  const depCell = (r) => ({ code: r.code, range: r.all, value: r.all.hi, products: r.products });
+  for (const c of m.deposits.filter((c) => c.periods)) {
+    for (const p of c.periods) add("deposit", `${c.title} by tenure`, p.label, null, Object.values(p.rows).map(depCell));
+  }
+  for (const [segment, cats] of bySegment(m.deposits.filter((c) => !c.periods), DEPOSIT_SEGMENTS)) {
+    for (const c of cats) add("deposit", segment, c.title, null, Object.values(c.rows).map(depCell));
+  }
+  return rows;
+}
+
 // ---------- formatting ----------
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const pct = (v) => (v === null || v === undefined || !Number.isFinite(v) ? "—" : v.toFixed(2) + "%");
-const range = (r) => (!hasRange(r) ? "—" : r.lo === r.hi ? pct(r.lo) : `${pct(r.lo)} – ${pct(r.hi)}`);
-const ordinal = (n) => n + (["th", "st", "nd", "rd"][(n % 100 - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th");
 const fmtDate = (s) => (s ? new Date(s).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "");
+const bankLabel = (code) => esc(state.model.nameOf[code] || code);
+const rowLabel = (r) => r.segment.endsWith(" by tenure") ? `${r.segment.replace(" by tenure", "")} ${r.product}`
+  : r.product + (r.variant === "Fixed" ? " (fixed)" : "");
 
-// Shows NMB − average; below average is good for loans/base, above is good for deposits.
-function vsAvgBadge(s, lowerIsBetter) {
-  if (s.nmb === null) return '<span class="dim">—</span>';
-  const v = s.nmb - s.avg;
-  if (Math.abs(v) < 0.005) return '<span class="cmp even">At average</span>';
-  const good = lowerIsBetter ? v < 0 : v > 0;
-  return `<span class="cmp ${good ? "good" : "bad"}">${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}</span>`;
+function rateHtml(r, mode) {
+  if (mode === "single" || r.lo === r.hi) return pct(mode === "single" ? r.single : r.lo);
+  return `${r.lo.toFixed(2)}<span class="to">–</span>${pct(r.hi)}`;
 }
 
-function bankLabel(code) {
-  return esc(state.model.nameOf[code] || code);
+// Arrow + gap vs NMB. diff = bank − NMB. Green when NMB is the better deal.
+function arrow(diff, lowerIsBetter) {
+  if (diff === null || diff === undefined || !Number.isFinite(diff)) return "";
+  if (Math.abs(diff) < 0.005) return `<span class="chg even">=</span>`;
+  const nmbBetter = lowerIsBetter ? diff > 0 : diff < 0;
+  return `<span class="chg ${nmbBetter ? "good" : "bad"}">${diff > 0 ? "▲" : "▼"}${Math.abs(diff).toFixed(2)}</span>`;
 }
 
 // ---------- rendering ----------
@@ -227,221 +294,180 @@ function bankLabel(code) {
 function render() {
   const m = state.model;
   document.querySelectorAll(".bank-count").forEach((el) => (el.textContent = m.banks.length));
-  if (state.source === "live") setBadge("Live", "live");
-  else setBadge("Backup copy", "snap");
-  const when = state.source === "live" ? "Live rates fetched " + fmtDate(state.data.fetched_at) : "Showing backup copy from " + fmtDate(state.data.fetched_at);
-  $("updated").textContent = `${when}${m.modified ? " · BankByaj last updated " + fmtDate(m.modified) : ""}`;
+  setBadge(state.source === "live" ? "Live" : "Backup copy", state.source === "live" ? "live" : "snap");
+  const stamp = state.source === "live" ? `Live · fetched ${fmtDate(state.data.fetched_at)}` : `Backup copy from ${fmtDate(state.data.fetched_at)}`;
+  document.querySelectorAll(".stamp").forEach((el) => (el.textContent = `${stamp}${m.modified ? ` · BankByaj updated ${fmtDate(m.modified)}` : ""}`));
 
-  const rows = summaryRows();
-  renderKpis(rows);
-  renderSummary(rows);
-  renderMatrix("loan");
-  renderMatrix("deposit");
+  state.rows = buildRows();
+  renderKpis();
+  renderScorecard("loan");
+  renderScorecard("deposit");
+  renderGrid("loan");
+  renderGrid("deposit");
   fitGrids();
 }
 
-function summaryRows() {
+function renderKpis() {
   const m = state.model;
-  const rows = [];
-  const push = (group, label, values, ascending, nmbText) => {
-    const s = standing(values, ascending);
-    if (s) rows.push({ group, label, s, ascending, nmbText });
-  };
-  push("Base rate", "Base rate", { ...m.base }, true, (s) => pct(s.nmb));
-  for (const kind of ["variable", "fixed"]) {
-    for (const c of m.loans) {
-      const values = {};
-      for (const r of Object.values(c.rows)) if (hasRange(r[kind])) values[r.code] = r[kind].lo;
-      const nmbRow = c.rows[NMB];
-      push(kind === "variable" ? "Loans · variable rate" : "Loans · fixed rate", c.title, values, true,
-        () => range(nmbRow?.[kind]));
-    }
-  }
-  for (const c of m.deposits.filter((c) => c.periods)) {
-    for (const p of c.periods) {
-      const values = {};
-      for (const r of Object.values(p.rows)) values[r.code] = r.all.hi;
-      push(`${c.title} · by period`, p.label, values, false, () => range(p.rows[NMB]?.all));
-    }
-  }
-  for (const c of m.deposits.filter((c) => !c.periods)) {
-    const values = {};
-    for (const r of Object.values(c.rows)) values[r.code] = r.all.hi;
-    push("Other deposits", c.title, values, false, () => range(c.rows[NMB]?.all));
-  }
-  return rows;
-}
-
-function renderKpis(rows) {
-  const base = rows.find((r) => r.group === "Base rate")?.s;
-  const offered = (pred) => rows.filter((r) => pred(r) && r.s.nmb !== null);
-  const loans = offered((r) => r.group.startsWith("Loans"));
-  const deps = offered((r) => r.group.includes("eposit"));
-  const loanWins = loans.filter((r) => r.s.nmb <= r.s.avg + 0.005);
-  const depWins = deps.filter((r) => r.s.nmb >= r.s.avg - 0.005);
-  const leads = rows.filter((r) => r.group !== "Base rate" && r.s.rank === 1);
-  const leadNames = leads.map((r) => r.group.includes("by period") ? `${r.group.split(" · ")[0]} ${r.label}`
-    : r.label + (r.group.includes("fixed") ? " (fixed)" : ""));
+  const base = standing({ ...m.base }, true);
+  const offered = (sec) => state.rows.filter((r) => r.section === sec && r.s.nmb !== null);
+  const loans = offered("loan"), deps = offered("deposit");
+  const loanWins = loans.filter((r) => r.s.nmb <= r.s.avg + 0.005).length;
+  const depWins = deps.filter((r) => r.s.nmb >= r.s.avg - 0.005).length;
+  const leads = state.rows.filter((r) => r.s.rank === 1);
+  const leadText = leads.map(rowLabel);
 
   const kpi = (label, value, note, cls = "") =>
     `<div class="kpi ${cls}"><div class="k-label">${label}</div><div class="k-value">${value}</div><div class="k-note">${note}</div></div>`;
   $("kpis").innerHTML = [
-    base ? kpi("NMB base rate", pct(base.nmb), `${ordinal(base.rank)} lowest of ${base.n} · market average ${pct(base.avg)}`, "featured") : "",
-    kpi("Loans priced below average", `${loanWins.length}<small> of ${loans.length}</small>`, "loan types where NMB's lowest rate beats the market average"),
-    kpi("Deposits paying above average", `${depWins.length}<small> of ${deps.length}</small>`, "deposit types where NMB's top rate beats the market average"),
-    kpi("Best in market", `${leads.length}<small> products</small>`, leads.length ? esc(leadNames.slice(0, 3).join(", ") + (leads.length > 3 ? ` +${leads.length - 3} more` : "")) : "NMB is not the market leader in any product"),
+    kpi("Base rate", pct(base.nmb), `Rank ${base.rank} of ${base.n} (lowest first) · market avg ${pct(base.avg)}`, "featured"),
+    kpi("Lending priced below market avg", `${loanWins}<small>/${loans.length}</small>`, "loan lines NMB offers, by lowest rate"),
+    kpi("Deposits paying above market avg", `${depWins}<small>/${deps.length}</small>`, "deposit lines NMB offers, by top rate"),
+    kpi("Market-leading rates", `${leads.length}`, leads.length ? esc(leadText.slice(0, 3).join(" · ") + (leads.length > 3 ? ` +${leads.length - 3}` : "")) : "None today"),
   ].join("");
 }
 
-function renderSummary(rows) {
-  const head = `<thead><tr><th>Product</th><th>NMB rate</th><th>NMB rank</th><th>Market lowest</th><th>Market highest</th><th class="num">Market average</th><th class="num">NMB vs average</th></tr></thead>`;
-  let body = "", group = null;
-  const csv = [["Group", "Product", "NMB rate", "NMB rank", "Banks compared", "Market lowest", "Lowest bank(s)", "Market highest", "Highest bank(s)", "Average", "NMB minus average (pp)"]];
-  const names = (codes) => codes.length === 1 ? bankLabel(codes[0])
-    : `<span title="${codes.map(bankLabel).join(", ")}">${bankLabel(codes[0])} +${codes.length - 1} more</span>`;
-  for (const r of rows) {
-    if (r.group !== group) {
-      group = r.group;
-      body += `<tr class="group"><td colspan="7">${esc(group)}</td></tr>`;
-    }
-    const s = r.s;
-    const diff = s.nmb === null ? null : s.nmb - s.avg;
-    body += `<tr>
-      <td class="product">${esc(r.label)}</td>
-      <td class="nmb-val">${s.nmb === null ? '<span class="dim">Not offered</span>' : esc(r.nmbText(s))}</td>
-      <td class="rank">${s.rank ? `${ordinal(s.rank)} <span class="of">of ${s.n}</span>` : '<span class="dim">—</span>'}</td>
-      <td>${pct(s.min)}<div class="who">${names(s.minBanks)}</div></td>
-      <td>${pct(s.max)}<div class="who">${names(s.maxBanks)}</div></td>
-      <td class="num">${pct(s.avg)}</td>
-      <td class="num">${vsAvgBadge(s, r.ascending)}</td>
-    </tr>`;
-    csv.push([r.group, r.label, r.nmbText(s), s.rank ? `${s.rank} of ${s.n}` : "", s.n,
-      s.min.toFixed(2), s.minBanks.map((c) => state.model.nameOf[c]).join("; "),
-      s.max.toFixed(2), s.maxBanks.map((c) => state.model.nameOf[c]).join("; "),
-      s.avg.toFixed(2), diff === null ? "" : diff.toFixed(2)]);
-  }
-  $("summary-table").innerHTML = head + `<tbody>${body}</tbody>`;
-  state.csv.summary = csv;
+// Position bar: left = best rate in market, right = worst. Dot = NMB, tick = market average.
+function positionBar(r) {
+  const s = r.s;
+  if (s.nmb === null) return "";
+  const best = r.lowerIsBetter ? s.min : s.max, worst = r.lowerIsBetter ? s.max : s.min;
+  const span = Math.abs(worst - best) || 1;
+  const at = (v) => (Math.abs(v - best) / span) * 100;
+  const better = r.lowerIsBetter ? s.nmb <= s.avg + 0.005 : s.nmb >= s.avg - 0.005;
+  return `<div class="pos" title="Best ${pct(best)} · average ${pct(s.avg)} · worst ${pct(worst)}">
+    <div class="pos-track"><i class="pos-avg" style="left:${at(s.avg).toFixed(1)}%"></i><i class="pos-dot ${better ? "good" : "bad"}" style="left:${at(s.nmb).toFixed(1)}%"></i></div>
+    <div class="pos-scale"><span>${pct(best)}</span><span>${pct(worst)}</span></div>
+  </div>`;
 }
 
-// One grid per section: rows = product types, columns = banks. The product and
-// NMB columns stay pinned on the left; bank names with their base rate stay
-// pinned on top. Each cell compares that bank with NMB.
-function renderMatrix(type) {
+function renderScorecard(section) {
   const m = state.model;
-  const isLoan = type === "loan";
-  const others = m.banks.filter((b) => b.code !== NMB).sort((a, b) => a.name.localeCompare(b.name));
-  const cols = [m.banks.find((b) => b.code === NMB), ...others].filter(Boolean);
+  const rows = state.rows.filter((r) => r.section === section);
+  const shown = rows.filter((r) => r.s.nmb !== null);
+  const missing = rows.filter((r) => r.s.nmb === null);
+  let body = "", seg = null;
 
-  // Loans are split into variable/fixed and compared on their lowest rate;
-  // deposits are compared on their highest rate.
-  const rows = [];
-  if (isLoan) {
-    for (const kind of ["variable", "fixed"]) {
-      for (const c of m.loans) {
-        const cells = {};
-        for (const r of Object.values(c.rows)) {
-          if (!hasRange(r[kind])) continue;
-          cells[r.code] = { range: r[kind], value: r[kind].lo, products: r.products.filter((p) => p.fixed === (kind === "fixed")) };
-        }
-        if (Object.keys(cells).length) rows.push({ group: kind === "variable" ? "Variable rate" : "Fixed rate", title: c.title, cells });
-      }
-    }
-  } else {
-    const cellsOf = (rowsByBank) => Object.fromEntries(Object.values(rowsByBank).map((r) =>
-      [r.code, { range: r.all, value: r.all.hi, products: r.products }]));
-    for (const c of m.deposits.filter((c) => c.periods)) {
-      for (const p of c.periods) rows.push({ group: `${c.title} by period`, title: p.label, cells: cellsOf(p.rows) });
-    }
-    for (const c of m.deposits.filter((c) => !c.periods)) {
-      rows.push({ group: "Other deposits", title: c.title, cells: cellsOf(c.rows) });
-    }
+  if (section === "loan") {
+    const base = standing({ ...m.base }, true);
+    const r = { s: base, lowerIsBetter: true };
+    body += `<tr class="seg"><td colspan="5">Funding</td></tr>
+      <tr><td class="p-name">Base rate</td><td class="p-nmb">${pct(base.nmb)}</td><td class="p-rank">${base.rank}<span>/${base.n}</span></td>
+      <td class="p-pos">${positionBar(r)}</td><td class="p-chg">${arrow(base.nmb - base.avg, true)}</td></tr>`;
   }
+  for (const r of shown) {
+    if (r.segment !== seg) { seg = r.segment; body += `<tr class="seg"><td colspan="5">${esc(seg)}</td></tr>`; }
+    const nmbCell = r.cells[NMB];
+    body += `<tr>
+      <td class="p-name">${esc(r.product)}${r.variant === "Fixed" ? '<span class="tag">Fixed</span>' : ""}</td>
+      <td class="p-nmb">${rateHtml(nmbCell.range)}</td>
+      <td class="p-rank">${r.s.rank}<span>/${r.s.n}</span></td>
+      <td class="p-pos">${positionBar(r)}</td>
+      <td class="p-chg">${arrow(r.s.nmb - r.s.avg, r.lowerIsBetter)}</td>
+    </tr>`;
+  }
+  $(`${section}-score`).innerHTML = `<thead><tr><th>Product</th><th>NMB</th><th>Rank</th><th>Position: best → worst</th><th class="num">vs avg</th></tr></thead><tbody>${body}</tbody>`;
+  $(`${section}-missing`).innerHTML = missing.length
+    ? `<b>Not offered by NMB (${missing.length}):</b> ${missing.map((r) => esc(rowLabel(r))).join(", ")}` : "";
 
-  const lowerIsBetter = isLoan;
+  const csv = [["Segment", "Product", "Variant", "NMB", "NMB rank", "Banks", "Market best", "Market average", "Market worst", "NMB minus average"]];
+  for (const r of rows) {
+    const s = r.s, best = r.lowerIsBetter ? s.min : s.max, worst = r.lowerIsBetter ? s.max : s.min;
+    csv.push([r.segment, r.product, r.variant || "", s.nmb?.toFixed(2) ?? "Not offered", s.rank ?? "", s.n, best.toFixed(2), s.avg.toFixed(2), worst.toFixed(2), s.nmb === null ? "" : (s.nmb - s.avg).toFixed(2)]);
+  }
+  state.csv[section + "-score"] = csv;
+}
+
+function orderedBanks() {
+  const m = state.model;
+  const others = m.banks.filter((b) => b.code !== NMB);
+  if (state.order === "base") others.sort((a, b) => (m.base[a.code] ?? 99) - (m.base[b.code] ?? 99) || a.name.localeCompare(b.name));
+  else others.sort((a, b) => a.name.localeCompare(b.name));
+  return [m.banks.find((b) => b.code === NMB), ...others].filter(Boolean);
+}
+
+// Grid: product lines down, banks across. Product, NMB and Rank columns are pinned;
+// bank headers (with base rate) are pinned on top.
+function renderGrid(section) {
+  const m = state.model;
+  const rows = state.rows.filter((r) => r.section === section);
+  const cols = orderedBanks();
+  const others = cols.slice(1);
+  const mode = state.show;
   const nmbBase = m.base[NMB];
 
-  let head = `<thead><tr><th class="pin pin-1">${isLoan ? "Loan type" : "Deposit type"}</th>`;
-  for (const b of cols) {
-    const me = b.code === NMB;
-    const v = m.base[b.code];
-    head += `<th class="${me ? "pin pin-2 nmb-col" : ""}">
-      <div class="b-name">${bankLabel(b.code)}</div>
-      <div class="b-base">Base <b>${pct(v)}</b></div>
-      ${me ? "" : cmp(v, nmbBase, true)}
-    </th>`;
+  let head = `<thead><tr>
+    <th class="pin c1">Product</th>
+    <th class="pin c2 nmb"><img src="assets/nmb-logo-white.png" alt="NMB Bank" class="nmb-logo"><div class="b-base">Base <b>${pct(nmbBase)}</b></div></th>
+    <th class="pin c3">Rank<div class="b-base">best in market</div></th>`;
+  for (const b of others) {
+    head += `<th><div class="b-name">${bankLabel(b.code)}</div><div class="b-base">Base <b>${pct(m.base[b.code])}</b> ${arrow(m.base[b.code] - nmbBase, true)}</div></th>`;
   }
   head += `</tr></thead>`;
 
-  let body = "", group = null;
-  const csv = [["Section", "Product", ...cols.map((b) => b.name), ...cols.filter((b) => b.code !== NMB).map((b) => b.name + " vs NMB")]];
-  csv.push(["", "Base rate", ...cols.map((b) => m.base[b.code]?.toFixed(2) ?? ""), ...cols.filter((b) => b.code !== NMB).map((b) => m.base[b.code] !== undefined && nmbBase !== undefined ? (m.base[b.code] - nmbBase).toFixed(2) : "")]);
-
-  for (const row of rows) {
-    if (row.group !== group) {
-      group = row.group;
-      body += `<tr class="group"><td class="pin pin-1">${esc(group)}</td><td class="pin pin-2 nmb-col"></td><td colspan="${cols.length - 1}"></td></tr>`;
+  const segments = [];
+  let body = "", seg = null;
+  for (const r of rows) {
+    if (r.segment !== seg) {
+      seg = r.segment;
+      const id = `${section}-seg-${segments.length}`;
+      segments.push([seg, id]);
+      body += `<tr class="seg" id="${id}"><td class="pin c1">${esc(seg)}</td><td class="pin c2 nmb"></td><td class="pin c3"></td><td colspan="${others.length}"></td></tr>`;
     }
-    const vals = Object.values(row.cells).map((c) => c.value);
-    const best = lowerIsBetter ? Math.min(...vals) : Math.max(...vals);
-    const nmb = row.cells[NMB];
-    body += `<tr><td class="pin pin-1">${esc(row.title)}</td>`;
-    for (const b of cols) {
-      const c = row.cells[b.code];
-      const me = b.code === NMB;
-      const cls = me ? "pin pin-2 nmb-col" : "";
-      if (!c) { body += `<td class="${cls}"><span class="empty">—</span></td>`; continue; }
-      const tip = c.products.map((p) => `${p.name}: ${p.rate.lo === p.rate.hi ? pct(p.rate.lo) : pct(p.rate.lo) + " – " + pct(p.rate.hi)}`).join("\n");
-      const bestTag = Math.abs(c.value - best) < 0.005 ? `<span class="best-tag">Best</span>` : "";
-      body += `<td class="${cls}" title="${esc(tip)}"><div class="rate">${rangeHtml(c.range)}${bestTag}</div>${me ? "" : cmp(c.value, nmb?.value, lowerIsBetter)}</td>`;
+    const s = r.s;
+    const best = r.lowerIsBetter ? s.min : s.max;
+    const nmb = r.cells[NMB];
+    const tip = (c) => esc(c.products.map((p) => `${p.name}: ${p.rate.lo === p.rate.hi ? pct(p.rate.lo) : pct(p.rate.lo) + " – " + pct(p.rate.hi)}`).join("\n"));
+    const cellRange = (c) => ({ ...c.range, single: c.value });
+    const star = (c) => (Math.abs(c.value - best) < 0.005 ? `<span class="star" title="Best rate in market">★</span>` : "");
+
+    body += `<tr class="${r.variant === "Fixed" ? "sub" : ""}">
+      <td class="pin c1">${r.variant === "Fixed" ? `<span class="tag">Fixed</span>` : esc(r.product)}${r.variant === "Variable" ? `<span class="var">variable</span>` : ""}</td>
+      <td class="pin c2 nmb" ${nmb ? `title="${tip(nmb)}"` : ""}>${nmb ? `<div class="rate">${rateHtml(cellRange(nmb), mode)}${star(nmb)}</div>` : '<span class="na">Not offered</span>'}</td>
+      <td class="pin c3"><div class="rank">${s.rank ? `${s.rank}<span>/${s.n}</span>` : '<span class="na">—</span>'}</div><div class="best">${pct(best)}</div></td>`;
+    for (const b of others) {
+      const c = r.cells[b.code];
+      if (!c) { body += `<td><span class="na">—</span></td>`; continue; }
+      body += `<td title="${tip(c)}"><div class="rate">${rateHtml(cellRange(c), mode)}${star(c)}</div>${nmb ? arrow(c.value - nmb.value, r.lowerIsBetter) : ""}</td>`;
     }
     body += `</tr>`;
-    csv.push([row.group, row.title, ...cols.map((b) => row.cells[b.code] ? shortRange(row.cells[b.code].range) : ""),
-      ...cols.filter((b) => b.code !== NMB).map((b) => row.cells[b.code] && nmb ? (row.cells[b.code].value - nmb.value).toFixed(2) : "")]);
   }
-  $(type + "-table").innerHTML = head + `<tbody>${body}</tbody>`;
-  state.csv[type] = csv;
+  $(`${section}-table`).innerHTML = head + `<tbody>${body}</tbody>`;
+  $(`${section}-jump`).innerHTML = segments.map(([name, id]) => `<button type="button" data-jump="${id}">${esc(name)}</button>`).join("");
+
+  const csv = [["Segment", "Product", "Variant", "NMB rank", "Market best", ...cols.map((b) => b.name), ...others.map((b) => `${b.name} vs NMB`)]];
+  csv.push(["", "Base rate", "", "", "", ...cols.map((b) => m.base[b.code]?.toFixed(2) ?? ""), ...others.map((b) => m.base[b.code] !== undefined ? (m.base[b.code] - nmbBase).toFixed(2) : "")]);
+  for (const r of rows) {
+    const nmb = r.cells[NMB];
+    const fmt = (c) => (c ? (c.range.lo === c.range.hi ? c.range.lo.toFixed(2) : `${c.range.lo.toFixed(2)} - ${c.range.hi.toFixed(2)}`) : "");
+    csv.push([r.segment, r.product, r.variant || "", r.s.rank ? `${r.s.rank}/${r.s.n}` : "", (r.lowerIsBetter ? r.s.min : r.s.max).toFixed(2),
+      ...cols.map((b) => fmt(r.cells[b.code])), ...others.map((b) => (r.cells[b.code] && nmb ? (r.cells[b.code].value - nmb.value).toFixed(2) : ""))]);
+  }
+  state.csv[section] = csv;
 }
 
-// Grids fill the window from their top edge down, so the page itself barely scrolls.
+// Grids fill the window from their top edge down.
 function fitGrids() {
   document.querySelectorAll(".grid-wrap").forEach((el) => {
     if (el.offsetParent === null) return;
     const top = el.getBoundingClientRect().top + window.scrollY;
-    el.style.height = Math.max(420, window.innerHeight - top - 24) + "px";
+    const legend = el.nextElementSibling?.offsetHeight || 0;
+    el.style.height = Math.max(440, window.innerHeight - top - legend - 36) + "px";
   });
-}
-
-function shortRange(r) {
-  return r.lo === r.hi ? pct(r.lo) : `${r.lo.toFixed(2)} – ${pct(r.hi)}`;
-}
-
-function rangeHtml(r) {
-  return r.lo === r.hi ? pct(r.lo) : `${r.lo.toFixed(2)}<span class="to">–</span>${pct(r.hi)}`;
-}
-
-// Pill under each cell: "▲ 0.25 higher" / "▼ 0.25 lower" than NMB. Green when NMB is the better deal.
-function cmp(v, nmb, lowerIsBetter) {
-  if (v === undefined || v === null || nmb === undefined || nmb === null) return `<div class="cmp none">NMB not offered</div>`;
-  const d = v - nmb;
-  if (Math.abs(d) < 0.005) return `<div class="cmp even">Same as NMB</div>`;
-  const nmbBetter = lowerIsBetter ? d > 0 : d < 0;
-  return `<div class="cmp ${nmbBetter ? "good" : "bad"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(2)} ${d > 0 ? "higher" : "lower"}</div>`;
 }
 
 // ---------- CSV ----------
 
-function downloadCsv(name) {
-  const rows = state.csv?.[name];
-  if (!rows) return;
+function downloadCsv(names) {
+  const rows = names.split(",").flatMap((n, i) => (i ? [[], ...(state.csv[n] || [])] : state.csv[n] || []));
+  if (!rows.length) return;
   const text = rows.map((r) => r.map((v) => {
     const s = String(v ?? "");
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join(",")).join("\n");
-  const label = name;
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv" }));
-  a.download = `nmb-comparison-${label}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `nmb-rate-comparison-${names.split(",")[0].replace("-score", "-overview")}-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -450,24 +476,33 @@ function downloadCsv(name) {
 
 function showTab(tab) {
   state.tab = tab;
-  document.querySelectorAll(".segmented button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+  document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "tab-" + tab));
   history.replaceState(null, "", "#" + tab);
   fitGrids();
 }
 
-document.querySelector(".segmented").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-tab]");
-  if (b) showTab(b.dataset.tab);
+function setToggle(group, value) {
+  document.querySelectorAll(`[data-${group}]`).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[group] === value)));
+}
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button, a[data-tab]");
+  if (!t) return;
+  if (t.dataset.tab) { e.preventDefault(); return showTab(t.dataset.tab); }
+  if (t.dataset.csv) return downloadCsv(t.dataset.csv);
+  if (t.dataset.order) { state.order = t.dataset.order; setToggle("order", state.order); renderGrid("loan"); renderGrid("deposit"); return; }
+  if (t.dataset.show) { state.show = t.dataset.show; setToggle("show", state.show); renderGrid("loan"); renderGrid("deposit"); return; }
+  if (t.dataset.jump) {
+    const row = $(t.dataset.jump), wrap = row.closest(".grid-wrap");
+    wrap.scrollTo({ top: row.offsetTop - wrap.querySelector("thead").offsetHeight, behavior: "smooth" });
+  }
 });
 $("refresh").addEventListener("click", load);
 window.addEventListener("resize", fitGrids);
 
-document.addEventListener("click", (e) => {
-  const csvBtn = e.target.closest("[data-csv]");
-  if (csvBtn) return downloadCsv(csvBtn.dataset.csv);
-});
-
+state.order = "az";
+state.show = "range";
 const initial = location.hash.slice(1);
 if (["summary", "loan", "deposit"].includes(initial)) showTab(initial);
 load();

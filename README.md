@@ -13,11 +13,13 @@ A website comparing NMB Bank's base, loan and deposit rates with every commercia
 
 | Tab | Content |
 |---|---|
-| Summary | One row per product type: NMB's rate, NMB's rank, market lowest/highest (and which bank), market average, and NMB's gap to the average |
-| Loans | One grid: product types down the side (variable and fixed listed separately), banks across the top, base rates in the first row. NMB stays pinned on the left; scroll sideways for the other banks. Each cell shows the bank's lowest–highest rate and, underneath, how much higher or lower its lowest rate is than NMB's (green/red). ★ marks the best rate in the market. Hover a cell for product names |
-| Deposits | Same grid for deposits. **Fixed Deposit** and **Institutional FD** are shown period by period (3 months, 6 months, 1 year, 2, 3, 5 and 10 years). Other deposit types compare each bank's highest rate with NMB's |
+| Overview | Four headline figures (base rate and rank, lending lines below market average, deposit lines above market average, market-leading rates), then a **Lending scorecard** and a **Deposit scorecard**: NMB's rate, rank, a position bar from market best to worst (with the market average marked) and the gap to the average. Products NMB doesn't offer are listed under each card |
+| Lending | Grid of every loan product (rows) against every commercial bank (columns), grouped into Home & property, Vehicle, Personal, Asset-backed, Business & priority sector. Each product's fixed-rate row sits under its variable-rate row. Product, NMB and Rank/market-best columns stay pinned; bank headers show each base rate and its gap to NMB |
+| Deposits | Same grid: Fixed Deposit and Institutional FD by tenure (3 months – 10 years), then other term deposits, savings, foreign currency and call accounts |
 
-Every table can be downloaded as CSV.
+In both grids each cell shows the rate (range or single rate, switchable) with an arrow and the gap to NMB in percentage points: green when NMB is the better deal for the customer, red when the other bank is. ★ marks the best rate in the market. Banks can be ordered A–Z or by base rate, and the buttons above each grid jump to a section. Every view downloads as CSV.
+
+Branding (colours, fonts, logo) follows [nmb.com.np](https://www.nmb.com.np/en); the logo files are in `assets/`.
 
 ## Rules used
 
