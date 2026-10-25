@@ -52,7 +52,7 @@ async function loadLive() {
 }
 
 async function load() {
-  setBadge("Loading…", "");
+  setBadge("Updating…", "");
   $("error").hidden = true;
   try {
     state.data = await loadLive();
@@ -75,7 +75,7 @@ async function load() {
 function setBadge(text, cls) {
   const b = $("source-badge");
   b.textContent = text;
-  b.className = "badge " + cls;
+  b.className = "pill " + cls;
 }
 
 // ---------- model ----------
@@ -165,22 +165,13 @@ const range = (r) => (!hasRange(r) ? "—" : r.lo === r.hi ? pct(r.lo) : `${pct(
 const ordinal = (n) => n + (["th", "st", "nd", "rd"][(n % 100 - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th");
 const fmtDate = (s) => (s ? new Date(s).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "");
 
-// diff = other − NMB. lowerIsBetter: for loans a cheaper NMB is "good".
-function deltaBadge(diff, lowerIsBetter, vsLabel = "") {
-  if (diff === null || !Number.isFinite(diff)) return '<span class="dim">—</span>';
-  if (Math.abs(diff) < 0.005) return `<span class="delta even">same${vsLabel}</span>`;
-  const nmbBetter = lowerIsBetter ? diff > 0 : diff < 0;
-  const sign = diff > 0 ? "+" : "−";
-  return `<span class="delta ${nmbBetter ? "good" : "bad"}">${sign}${Math.abs(diff).toFixed(2)}${vsLabel}</span>`;
-}
-
 // Shows NMB − average; below average is good for loans/base, above is good for deposits.
 function vsAvgBadge(s, lowerIsBetter) {
   if (s.nmb === null) return '<span class="dim">—</span>';
   const v = s.nmb - s.avg;
-  if (Math.abs(v) < 0.005) return '<span class="delta even">at avg</span>';
+  if (Math.abs(v) < 0.005) return '<span class="cmp even">At average</span>';
   const good = lowerIsBetter ? v < 0 : v > 0;
-  return `<span class="delta ${good ? "good" : "bad"}">${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}</span>`;
+  return `<span class="cmp ${good ? "good" : "bad"}">${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(2)}</span>`;
 }
 
 function bankLabel(code) {
@@ -191,15 +182,18 @@ function bankLabel(code) {
 
 function render() {
   const m = state.model;
-  $("bank-count").textContent = m.banks.length;
-  if (state.source === "live") setBadge("● Live", "live");
+  document.querySelectorAll(".bank-count").forEach((el) => (el.textContent = m.banks.length));
+  if (state.source === "live") setBadge("Live", "live");
   else setBadge("Backup copy", "snap");
-  const when = state.source === "live" ? "Fetched " + fmtDate(state.data.fetched_at) : "Backup from " + fmtDate(state.data.fetched_at);
-  $("updated").textContent = `${when}${m.modified ? " · source updated " + fmtDate(m.modified) : ""}`;
+  const when = state.source === "live" ? "Live rates fetched " + fmtDate(state.data.fetched_at) : "Showing backup copy from " + fmtDate(state.data.fetched_at);
+  $("updated").textContent = `${when}${m.modified ? " · BankByaj last updated " + fmtDate(m.modified) : ""}`;
 
-  renderSummary();
+  const rows = summaryRows();
+  renderKpis(rows);
+  renderSummary(rows);
   renderMatrix("loan");
   renderMatrix("deposit");
+  fitGrids();
 }
 
 function summaryRows() {
@@ -227,11 +221,32 @@ function summaryRows() {
   return rows;
 }
 
-function renderSummary() {
-  const rows = summaryRows();
-  const head = `<thead><tr><th>Product</th><th>NMB rate</th><th class="num">NMB rank</th><th>Market lowest</th><th>Market highest</th><th class="num">Average</th><th class="num">NMB vs avg</th></tr></thead>`;
+function renderKpis(rows) {
+  const base = rows.find((r) => r.group === "Base rate")?.s;
+  const offered = (pred) => rows.filter((r) => pred(r) && r.s.nmb !== null);
+  const loans = offered((r) => r.group.startsWith("Loans"));
+  const deps = offered((r) => r.group === "Deposits");
+  const loanWins = loans.filter((r) => r.s.nmb <= r.s.avg + 0.005);
+  const depWins = deps.filter((r) => r.s.nmb >= r.s.avg - 0.005);
+  const leads = rows.filter((r) => r.group !== "Base rate" && r.s.rank === 1);
+  const leadNames = leads.map((r) => r.label + (r.group.includes("fixed") ? " (fixed)" : ""));
+
+  const kpi = (label, value, note, cls = "") =>
+    `<div class="kpi ${cls}"><div class="k-label">${label}</div><div class="k-value">${value}</div><div class="k-note">${note}</div></div>`;
+  $("kpis").innerHTML = [
+    base ? kpi("NMB base rate", pct(base.nmb), `${ordinal(base.rank)} lowest of ${base.n} · market average ${pct(base.avg)}`, "featured") : "",
+    kpi("Loans priced below average", `${loanWins.length}<small> of ${loans.length}</small>`, "loan types where NMB's lowest rate beats the market average"),
+    kpi("Deposits paying above average", `${depWins.length}<small> of ${deps.length}</small>`, "deposit types where NMB's top rate beats the market average"),
+    kpi("Best in market", `${leads.length}<small> products</small>`, leads.length ? esc(leadNames.slice(0, 3).join(", ") + (leads.length > 3 ? ` +${leads.length - 3} more` : "")) : "NMB is not the market leader in any product"),
+  ].join("");
+}
+
+function renderSummary(rows) {
+  const head = `<thead><tr><th>Product</th><th>NMB rate</th><th>NMB rank</th><th>Market lowest</th><th>Market highest</th><th class="num">Market average</th><th class="num">NMB vs average</th></tr></thead>`;
   let body = "", group = null;
   const csv = [["Group", "Product", "NMB rate", "NMB rank", "Banks compared", "Market lowest", "Lowest bank(s)", "Market highest", "Highest bank(s)", "Average", "NMB minus average (pp)"]];
+  const names = (codes) => codes.length === 1 ? bankLabel(codes[0])
+    : `<span title="${codes.map(bankLabel).join(", ")}">${bankLabel(codes[0])} +${codes.length - 1} more</span>`;
   for (const r of rows) {
     if (r.group !== group) {
       group = r.group;
@@ -239,12 +254,10 @@ function renderSummary() {
     }
     const s = r.s;
     const diff = s.nmb === null ? null : s.nmb - s.avg;
-    const names = (codes) => codes.length === 1 ? bankLabel(codes[0])
-      : `<span title="${codes.map(bankLabel).join(", ")}">${bankLabel(codes[0])} +${codes.length - 1} more</span>`;
     body += `<tr>
-      <td>${esc(r.label)}</td>
-      <td><b>${esc(r.nmbText(s))}</b></td>
-      <td class="num">${s.rank ? `${ordinal(s.rank)} <span class="dim">of ${s.n}</span>` : '<span class="dim">no product</span>'}</td>
+      <td class="product">${esc(r.label)}</td>
+      <td class="nmb-val">${s.nmb === null ? '<span class="dim">Not offered</span>' : esc(r.nmbText(s))}</td>
+      <td class="rank">${s.rank ? `${ordinal(s.rank)} <span class="of">of ${s.n}</span>` : '<span class="dim">—</span>'}</td>
       <td>${pct(s.min)}<div class="who">${names(s.minBanks)}</div></td>
       <td>${pct(s.max)}<div class="who">${names(s.maxBanks)}</div></td>
       <td class="num">${pct(s.avg)}</td>
@@ -259,17 +272,17 @@ function renderSummary() {
   state.csv.summary = csv;
 }
 
-// One matrix per section: rows = product types, columns = banks.
-// Product and NMB columns stay pinned on the left; bank names and the base-rate
-// row stay pinned on top. Each cell compares that bank with NMB.
+// One grid per section: rows = product types, columns = banks. The product and
+// NMB columns stay pinned on the left; bank names with their base rate stay
+// pinned on top. Each cell compares that bank with NMB.
 function renderMatrix(type) {
   const m = state.model;
   const isLoan = type === "loan";
   const others = m.banks.filter((b) => b.code !== NMB).sort((a, b) => a.name.localeCompare(b.name));
   const cols = [m.banks.find((b) => b.code === NMB), ...others].filter(Boolean);
 
-  // Rows: loans split into variable/fixed; compare on lowest rate for loans,
-  // highest rate for deposits.
+  // Loans are split into variable/fixed and compared on their lowest rate;
+  // deposits are compared on their highest rate.
   const rows = [];
   if (isLoan) {
     for (const kind of ["variable", "fixed"]) {
@@ -279,27 +292,29 @@ function renderMatrix(type) {
           if (!hasRange(r[kind])) continue;
           cells[r.code] = { range: r[kind], value: r[kind].lo, products: r.products.filter((p) => p.fixed === (kind === "fixed")) };
         }
-        if (Object.keys(cells).length) rows.push({ group: kind === "variable" ? "Variable rate loans" : "Fixed rate loans", title: c.title, cells });
+        if (Object.keys(cells).length) rows.push({ group: kind === "variable" ? "Variable rate" : "Fixed rate", title: c.title, cells });
       }
     }
   } else {
     for (const c of m.deposits) {
       const cells = {};
       for (const r of Object.values(c.rows)) cells[r.code] = { range: r.all, value: r.all.hi, products: r.products };
-      rows.push({ group: "Deposits", title: c.title, cells });
+      rows.push({ group: null, title: c.title, cells });
     }
   }
 
   const lowerIsBetter = isLoan;
   const nmbBase = m.base[NMB];
 
-  let head = `<thead><tr><th class="pin pin-1">Product</th>`;
-  for (const b of cols) head += `<th class="${b.code === NMB ? "pin pin-2 nmb-col" : "bank-col"}">${bankLabel(b.code)}</th>`;
-  head += `</tr><tr class="base-row"><th class="pin pin-1">Base rate</th>`;
+  let head = `<thead><tr><th class="pin pin-1">${isLoan ? "Loan type" : "Deposit type"}</th>`;
   for (const b of cols) {
+    const me = b.code === NMB;
     const v = m.base[b.code];
-    if (b.code === NMB) head += `<th class="pin pin-2 nmb-col"><div class="rate">${pct(v)}</div></th>`;
-    else head += `<th><div class="rate">${pct(v)}</div>${cmp(v, nmbBase, true)}</th>`;
+    head += `<th class="${me ? "pin pin-2 nmb-col" : ""}">
+      <div class="b-name">${bankLabel(b.code)}</div>
+      <div class="b-base">Base <b>${pct(v)}</b></div>
+      ${me ? "" : cmp(v, nmbBase, true)}
+    </th>`;
   }
   head += `</tr></thead>`;
 
@@ -308,7 +323,7 @@ function renderMatrix(type) {
   csv.push(["", "Base rate", ...cols.map((b) => m.base[b.code]?.toFixed(2) ?? ""), ...cols.filter((b) => b.code !== NMB).map((b) => m.base[b.code] !== undefined && nmbBase !== undefined ? (m.base[b.code] - nmbBase).toFixed(2) : "")]);
 
   for (const row of rows) {
-    if (row.group !== group) {
+    if (row.group && row.group !== group) {
       group = row.group;
       body += `<tr class="group"><td class="pin pin-1">${esc(group)}</td><td class="pin pin-2 nmb-col"></td><td colspan="${cols.length - 1}"></td></tr>`;
     }
@@ -320,37 +335,41 @@ function renderMatrix(type) {
       const c = row.cells[b.code];
       const me = b.code === NMB;
       const cls = me ? "pin pin-2 nmb-col" : "";
-      if (!c) { body += `<td class="${cls}"><span class="dim">—</span></td>`; continue; }
+      if (!c) { body += `<td class="${cls}"><span class="empty">—</span></td>`; continue; }
       const tip = c.products.map((p) => `${p.name}: ${p.rate.lo === p.rate.hi ? pct(p.rate.lo) : pct(p.rate.lo) + " – " + pct(p.rate.hi)}`).join("\n");
-      const star = Math.abs(c.value - best) < 0.005 ? `<span class="best" title="Best rate in market">★</span>` : "";
-      body += `<td class="${cls}" title="${esc(tip)}"><div class="rate">${shortRange(c.range)}${star}</div>${me ? "" : cmp(c.value, nmb?.value, lowerIsBetter)}</td>`;
+      const bestTag = Math.abs(c.value - best) < 0.005 ? `<span class="best-tag">Best</span>` : "";
+      body += `<td class="${cls}" title="${esc(tip)}"><div class="rate">${rangeHtml(c.range)}${bestTag}</div>${me ? "" : cmp(c.value, nmb?.value, lowerIsBetter)}</td>`;
     }
     body += `</tr>`;
-    csv.push([row.group, row.title, ...cols.map((b) => row.cells[b.code] ? shortRange(row.cells[b.code].range) : ""),
+    csv.push([row.group || "Deposits", row.title, ...cols.map((b) => row.cells[b.code] ? shortRange(row.cells[b.code].range) : ""),
       ...cols.filter((b) => b.code !== NMB).map((b) => row.cells[b.code] && nmb ? (row.cells[b.code].value - nmb.value).toFixed(2) : "")]);
   }
-  const table = $(type + "-table");
-  table.innerHTML = head + `<tbody>${body}</tbody>`;
+  $(type + "-table").innerHTML = head + `<tbody>${body}</tbody>`;
   state.csv[type] = csv;
-  pinBaseRow(table);
 }
 
-// The base-rate row sticks just under the bank-name row; its offset depends on
-// how many lines the bank names wrap to. Hidden tabs measure 0, so redo on show.
-function pinBaseRow(table) {
-  const h = table.tHead?.rows[0]?.offsetHeight;
-  if (h) table.style.setProperty("--head-h", h + "px");
+// Grids fill the window from their top edge down, so the page itself barely scrolls.
+function fitGrids() {
+  document.querySelectorAll(".grid-wrap").forEach((el) => {
+    if (el.offsetParent === null) return;
+    const top = el.getBoundingClientRect().top + window.scrollY;
+    el.style.height = Math.max(420, window.innerHeight - top - 24) + "px";
+  });
 }
 
 function shortRange(r) {
   return r.lo === r.hi ? pct(r.lo) : `${r.lo.toFixed(2)} – ${pct(r.hi)}`;
 }
 
-// Small "▲ 0.25 higher" / "▼ 0.25 lower" vs NMB. Green when NMB is the better deal.
+function rangeHtml(r) {
+  return r.lo === r.hi ? pct(r.lo) : `${r.lo.toFixed(2)}<span class="to">–</span>${pct(r.hi)}`;
+}
+
+// Pill under each cell: "▲ 0.25 higher" / "▼ 0.25 lower" than NMB. Green when NMB is the better deal.
 function cmp(v, nmb, lowerIsBetter) {
-  if (v === undefined || v === null || nmb === undefined || nmb === null) return `<div class="cmp none">no NMB product</div>`;
+  if (v === undefined || v === null || nmb === undefined || nmb === null) return `<div class="cmp none">NMB not offered</div>`;
   const d = v - nmb;
-  if (Math.abs(d) < 0.005) return `<div class="cmp even">same as NMB</div>`;
+  if (Math.abs(d) < 0.005) return `<div class="cmp even">Same as NMB</div>`;
   const nmbBetter = lowerIsBetter ? d > 0 : d < 0;
   return `<div class="cmp ${nmbBetter ? "good" : "bad"}">${d > 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(2)} ${d > 0 ? "higher" : "lower"}</div>`;
 }
@@ -376,18 +395,18 @@ function downloadCsv(name) {
 
 function showTab(tab) {
   state.tab = tab;
-  document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+  document.querySelectorAll(".segmented button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "tab-" + tab));
   history.replaceState(null, "", "#" + tab);
-  const t = $(tab + "-table");
-  if (t) pinBaseRow(t);
+  fitGrids();
 }
 
-document.querySelector(".tabs").addEventListener("click", (e) => {
+document.querySelector(".segmented").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tab]");
   if (b) showTab(b.dataset.tab);
 });
 $("refresh").addEventListener("click", load);
+window.addEventListener("resize", fitGrids);
 
 document.addEventListener("click", (e) => {
   const csvBtn = e.target.closest("[data-csv]");
