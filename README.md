@@ -13,9 +13,9 @@ A website comparing NMB Bank's base, loan and deposit rates with every commercia
 
 | Tab | Content |
 |---|---|
-| Overview | Four headline figures (base rate and rank, lending lines below market average, deposit lines above market average, market-leading rates), then a **Lending scorecard** and a **Deposit scorecard**: NMB's rate, rank, a position bar from market best to worst (with the market average marked) and the gap to the average. Products NMB doesn't offer are listed under each card |
+| Overview | Four headline figures (base rate and rank, deposit lines above market average, lending lines below market average, market-leading rates), then a **Deposit scorecard** and a **Lending scorecard**: NMB's rate, rank, a position bar from market best to worst (with the market average marked) and the gap to the average. Products NMB doesn't offer are listed under each card |
+| Deposits | Grid of every deposit product (rows) against every commercial bank (columns), with the same pinned columns as Lending: Fixed Deposit and Institutional FD by tenure (3 months – 10 years), then other term deposits, savings, foreign currency and call accounts |
 | Lending | Grid of every loan product (rows) against every commercial bank (columns), grouped into Home & property, Vehicle, Personal, Asset-backed, Business & priority sector. Each product's fixed-rate row sits under its variable-rate row. Product, NMB and Rank/market-best columns stay pinned; bank headers show each base rate and its gap to NMB |
-| Deposits | Same grid: Fixed Deposit and Institutional FD by tenure (3 months – 10 years), then other term deposits, savings, foreign currency and call accounts |
 
 In both grids each cell shows the rate (range or single rate, switchable) with an arrow and the gap to NMB in percentage points: green when NMB is the better deal for the customer, red when the other bank is. ★ marks the best rate in the market. Banks can be ordered A–Z or by base rate, and the buttons above each grid jump to a section. Every view downloads as CSV.
 

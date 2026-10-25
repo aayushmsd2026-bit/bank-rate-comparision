@@ -314,15 +314,15 @@ function renderKpis() {
   const loans = offered("loan"), deps = offered("deposit");
   const loanWins = loans.filter((r) => r.s.nmb <= r.s.avg + 0.005).length;
   const depWins = deps.filter((r) => r.s.nmb >= r.s.avg - 0.005).length;
-  const leads = state.rows.filter((r) => r.s.rank === 1);
+  const leads = state.rows.filter((r) => r.s.rank === 1).sort((a, b) => (a.section === "deposit" ? 0 : 1) - (b.section === "deposit" ? 0 : 1));
   const leadText = leads.map(rowLabel);
 
   const kpi = (label, value, note, cls = "") =>
     `<div class="kpi ${cls}"><div class="k-label">${label}</div><div class="k-value">${value}</div><div class="k-note">${note}</div></div>`;
   $("kpis").innerHTML = [
     kpi("Base rate", pct(base.nmb), `Rank ${base.rank} of ${base.n} (lowest first) · market avg ${pct(base.avg)}`, "featured"),
-    kpi("Lending priced below market avg", `${loanWins}<small>/${loans.length}</small>`, "loan lines NMB offers, by lowest rate"),
     kpi("Deposits paying above market avg", `${depWins}<small>/${deps.length}</small>`, "deposit lines NMB offers, by top rate"),
+    kpi("Lending priced below market avg", `${loanWins}<small>/${loans.length}</small>`, "loan lines NMB offers, by lowest rate"),
     kpi("Market-leading rates", `${leads.length}`, leads.length ? esc(leadText.slice(0, 3).join(" · ") + (leads.length > 3 ? ` +${leads.length - 3}` : "")) : "None today"),
   ].join("");
 }

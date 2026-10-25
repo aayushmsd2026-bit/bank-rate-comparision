@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202610250530">
+  <link rel="stylesheet" href="style.css?v=202610250538">
 </head>
 <body>
   <header class="nav">
@@ -21,8 +21,8 @@
       </a>
       <nav class="tabs" role="tablist" aria-label="Sections">
         <button role="tab" data-tab="summary" aria-selected="true">Overview</button>
-        <button role="tab" data-tab="loan" aria-selected="false">Lending</button>
         <button role="tab" data-tab="deposit" aria-selected="false">Deposits</button>
+        <button role="tab" data-tab="loan" aria-selected="false">Lending</button>
       </nav>
       <div class="nav-status">
         <span id="source-badge" class="pill">Loading…</span>
@@ -41,20 +41,12 @@
           <h1>Market position</h1>
           <p class="sub">NMB Bank against Nepal's <span class="bank-count">20</span> commercial banks · <span class="stamp"></span></p>
         </div>
-        <button class="btn-cta" type="button" data-csv="loan-score,deposit-score">Download</button>
+        <button class="btn-cta" type="button" data-csv="deposit-score,loan-score">Download</button>
       </div>
 
       <div id="kpis" class="kpis"></div>
 
       <div class="cards2">
-        <article class="card">
-          <header class="card-head">
-            <h2>Lending scorecard</h2>
-            <p>Ranked by each bank's lowest rate · 1 = cheapest</p>
-          </header>
-          <table id="loan-score" class="score"></table>
-          <p id="loan-missing" class="missing"></p>
-        </article>
         <article class="card">
           <header class="card-head">
             <h2>Deposit scorecard</h2>
@@ -63,43 +55,20 @@
           <table id="deposit-score" class="score"></table>
           <p id="deposit-missing" class="missing"></p>
         </article>
+        <article class="card">
+          <header class="card-head">
+            <h2>Lending scorecard</h2>
+            <p>Ranked by each bank's lowest rate · 1 = cheapest</p>
+          </header>
+          <table id="loan-score" class="score"></table>
+          <p id="loan-missing" class="missing"></p>
+        </article>
       </div>
       <p class="legend">
         <span><i class="dot good"></i>Better than market average</span>
         <span><i class="dot bad"></i>Worse than market average</span>
         <span><i class="tick"></i>Market average</span>
         <span>▲▼ gap in percentage points</span>
-      </p>
-    </section>
-
-    <!-- Lending -->
-    <section id="tab-loan" class="panel" hidden>
-      <div class="head">
-        <div>
-          <h1>Lending rates</h1>
-          <p class="sub">Every commercial bank by product · <span class="stamp"></span></p>
-        </div>
-        <button class="btn-cta" type="button" data-csv="loan">Download</button>
-      </div>
-      <div class="toolbar">
-        <div class="jump" id="loan-jump"></div>
-        <div class="controls">
-          <div class="toggle" role="group" aria-label="Rate shown">
-            <button type="button" data-show="range" aria-pressed="true">Range</button>
-            <button type="button" data-show="single" aria-pressed="false">Lowest</button>
-          </div>
-          <div class="toggle" role="group" aria-label="Bank order">
-            <button type="button" data-order="az" aria-pressed="true">A–Z</button>
-            <button type="button" data-order="base" aria-pressed="false">By base rate</button>
-          </div>
-        </div>
-      </div>
-      <div class="grid-wrap"><table id="loan-table" class="grid"></table></div>
-      <p class="legend">
-        <span><b class="chg good">▲</b> NMB cheaper</span>
-        <span><b class="chg bad">▼</b> Bank cheaper than NMB</span>
-        <span><span class="star">★</span> Lowest in market</span>
-        <span>Gap = bank's lowest rate − NMB's lowest rate (pp) · hover a cell for product names</span>
       </p>
     </section>
 
@@ -133,6 +102,37 @@
         <span>Gap = bank's highest rate − NMB's highest rate (pp) · hover a cell for product names</span>
       </p>
     </section>
+    <!-- Lending -->
+    <section id="tab-loan" class="panel" hidden>
+      <div class="head">
+        <div>
+          <h1>Lending rates</h1>
+          <p class="sub">Every commercial bank by product · <span class="stamp"></span></p>
+        </div>
+        <button class="btn-cta" type="button" data-csv="loan">Download</button>
+      </div>
+      <div class="toolbar">
+        <div class="jump" id="loan-jump"></div>
+        <div class="controls">
+          <div class="toggle" role="group" aria-label="Rate shown">
+            <button type="button" data-show="range" aria-pressed="true">Range</button>
+            <button type="button" data-show="single" aria-pressed="false">Lowest</button>
+          </div>
+          <div class="toggle" role="group" aria-label="Bank order">
+            <button type="button" data-order="az" aria-pressed="true">A–Z</button>
+            <button type="button" data-order="base" aria-pressed="false">By base rate</button>
+          </div>
+        </div>
+      </div>
+      <div class="grid-wrap"><table id="loan-table" class="grid"></table></div>
+      <p class="legend">
+        <span><b class="chg good">▲</b> NMB cheaper</span>
+        <span><b class="chg bad">▼</b> Bank cheaper than NMB</span>
+        <span><span class="star">★</span> Lowest in market</span>
+        <span>Gap = bank's lowest rate − NMB's lowest rate (pp) · hover a cell for product names</span>
+      </p>
+    </section>
+
   </main>
 
   <footer class="foot">
@@ -147,6 +147,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202610250530"></script>
+  <script src="app.js?v=202610250538"></script>
 </body>
 </html>
