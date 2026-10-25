@@ -78,7 +78,7 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .notice { margin-top: 20px; background: var(--bad-bg); color: var(--bad); padding: 14px 18px; border-radius: 12px; }
 
 /* ---------- KPIs ---------- */
-.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+.kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 20px; }
 .kpi { background: var(--surface); border: 1px solid var(--hair-soft); border-radius: var(--radius); padding: 20px 22px; }
 .k-label { font-size: .82rem; font-weight: 600; color: var(--muted); }
 .k-value { font-family: var(--title); font-size: 2.2rem; font-weight: 800; color: var(--ink); letter-spacing: -.03em; line-height: 1.1; margin: 8px 0 6px; }
@@ -185,6 +185,34 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .b-base .chg { margin: 0 0 0 4px; padding: 0 5px; font-size: .7rem; }
 .legend .chg { margin: 0; }
 
+/* ---------- updates strip ---------- */
+.updates { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 16px; font-size: .84rem; }
+.upd-label { font-weight: 700; color: var(--teal-ink); margin-right: 4px; }
+.upd { background: var(--surface); border: 1px solid var(--hair-soft); border-radius: 999px; padding: 4px 12px; }
+.upd b { font-weight: 600; color: var(--ink); }
+.fresh { display: inline-block; margin-left: 5px; font-size: .62rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #fff; background: var(--teal); padding: 1px 5px; border-radius: 4px; vertical-align: 1px; }
+.grid thead .nmb .fresh { background: #fff; color: var(--teal-ink); }
+
+/* ---------- bank profiles ---------- */
+.sheet { background: var(--surface); border: 1px solid var(--hair-soft); border-radius: var(--radius); overflow-x: auto; }
+.list { width: 100%; border-collapse: collapse; }
+.banks th, .banks td { padding: 10px 14px; border-bottom: 1px solid var(--hair-soft); white-space: nowrap; text-align: left; vertical-align: middle; }
+.banks th { vertical-align: bottom; border-bottom: 1px solid var(--hair); background: var(--surface); position: sticky; top: 0; }
+.banks th button { border: 0; background: none; padding: 0; cursor: pointer; font-family: var(--title); font-weight: 700; font-size: .86rem; color: var(--ink); text-align: inherit; }
+.banks th.on button, .banks th button:hover { color: var(--teal-ink); }
+.banks .num { text-align: right; }
+.th-note { font-size: .72rem; color: var(--faint); font-weight: 500; }
+.th-rank { margin-top: 4px; font-size: .72rem; font-weight: 700; color: var(--teal-ink); }
+.banks td.bank { font-weight: 600; color: var(--ink); }
+.banks .val { font-weight: 600; }
+.banks td .chg { margin-top: 2px; }
+.banks tr.nmb-row td { background: var(--teal-tint); }
+.banks tr.nmb-row td.bank { color: var(--teal-ink); }
+.banks tr.nmb-row .val { color: var(--teal-ink); font-weight: 700; }
+.row-logo { height: 18px; vertical-align: -4px; margin-right: 8px; }
+.banks tr.avg-row td { background: var(--bg); color: var(--muted); font-weight: 600; border-top: 1px solid var(--hair); }
+.banks tbody tr:not(.nmb-row):not(.avg-row):hover td { background: #FAFCFD; }
+
 /* ---------- footer ---------- */
 .foot { background: var(--ink); color: rgba(255,255,255,.7); font-size: .8rem; }
 .foot-inner { display: flex; gap: 28px; align-items: flex-start; padding: 26px var(--gutter); }
@@ -194,7 +222,7 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .foot a { color: #fff; }
 
 @media (max-width: 1180px) {
-  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .kpis { grid-template-columns: repeat(3, 1fr); }
   .cards2 { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {

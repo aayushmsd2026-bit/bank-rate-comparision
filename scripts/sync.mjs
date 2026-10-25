@@ -20,10 +20,11 @@ async function get(path) {
   }
 }
 
-const [loanCats, depositCats, baseRates] = await Promise.all([
+const [loanCats, depositCats, baseRates, blogs] = await Promise.all([
   get("categories/loan"),
   get("categories/deposit"),
   get("baserates"),
+  get("blogs/latest").catch(() => ({ blogs: [] })),
 ]);
 
 // Each category response repeats the full institute list; keep it once.
@@ -40,6 +41,7 @@ const snapshot = {
   loanCategories: loanCats.categories,
   depositCategories: depositCats.categories,
   baseRates: baseRates.base_rates,
+  updates: (blogs.blogs || []).map(({ title, summary, updated_at }) => ({ title, summary, updated_at })),
   institutes: institutes.map(({ name, code, type, class: cls, current_base_rate }) =>
     ({ name, code, type, class: cls, current_base_rate })),
   categories,

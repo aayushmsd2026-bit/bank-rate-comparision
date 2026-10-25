@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202610250545">
+  <link rel="stylesheet" href="style.css?v=202610250658">
 </head>
 <body>
   <header class="nav">
@@ -23,6 +23,7 @@
         <button role="tab" data-tab="summary" aria-selected="true">Overview</button>
         <button role="tab" data-tab="deposit" aria-selected="false">Deposits</button>
         <button role="tab" data-tab="loan" aria-selected="false">Lending</button>
+        <button role="tab" data-tab="banks" aria-selected="false">Banks</button>
       </nav>
       <div class="nav-status">
         <span id="source-badge" class="pill">Loading…</span>
@@ -44,6 +45,7 @@
         <button class="btn-cta" type="button" data-csv="deposit-score,loan-score">Download</button>
       </div>
 
+      <p id="updates" class="updates" hidden></p>
       <div id="kpis" class="kpis"></div>
 
       <div class="cards2">
@@ -119,6 +121,7 @@
           <div class="toggle" role="group" aria-label="Rate shown">
             <button type="button" data-show="range" aria-pressed="true">Range</button>
             <button type="button" data-show="single" aria-pressed="false">Lowest</button>
+            <button type="button" data-show="premium" aria-pressed="false" title="Rate minus the bank's base rate">Premium</button>
           </div>
           <div class="toggle" role="group" aria-label="Bank order">
             <button type="button" data-order="az" aria-pressed="true">A–Z</button>
@@ -135,6 +138,24 @@
       </p>
     </section>
 
+    <!-- Banks -->
+    <section id="tab-banks" class="panel" hidden>
+      <div class="head">
+        <div>
+          <h1>Bank profiles</h1>
+          <p class="sub">Key figures for every commercial bank · click a column to rank best first · <span class="stamp"></span></p>
+        </div>
+        <button class="btn-cta" type="button" data-csv="banks">Download</button>
+      </div>
+      <div class="sheet"><table id="banks-table" class="list banks"></table></div>
+      <p class="legend">
+        <span><b class="chg good">▲</b> NMB ahead of this bank</span>
+        <span><b class="chg bad">▼</b> NMB behind this bank</span>
+        <span><span class="star">★</span> Best in market</span>
+        <span><span class="fresh">new</span> base rate published this period; others show last period's</span>
+        <span>NPA = non-performing loans as a share of total loans, as reported to BankByaj</span>
+      </p>
+    </section>
   </main>
 
   <footer class="foot">
@@ -149,6 +170,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202610250545"></script>
+  <script src="app.js?v=202610250658"></script>
 </body>
 </html>

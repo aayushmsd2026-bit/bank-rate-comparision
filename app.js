@@ -27,10 +27,11 @@ async function getJson(url, timeoutMs = 20000) {
 
 // Same shape as scripts/sync.mjs writes.
 async function loadLive() {
-  const [loanCats, depositCats, baseRates] = await Promise.all([
+  const [loanCats, depositCats, baseRates, blogs] = await Promise.all([
     getJson(API + "categories/loan"),
     getJson(API + "categories/deposit"),
     getJson(API + "baserates"),
+    getJson(API + "blogs/latest").catch(() => ({ blogs: [] })),
   ]);
   const all = [...loanCats.categories, ...depositCats.categories];
   const responses = await Promise.all(all.map((c) => getJson(API + "category/" + encodeURIComponent(c.url_key))));
@@ -46,6 +47,7 @@ async function loadLive() {
     loanCategories: loanCats.categories,
     depositCategories: depositCats.categories,
     baseRates: baseRates.base_rates,
+    updates: (blogs.blogs || []).map(({ title, summary, updated_at }) => ({ title, summary, updated_at })),
     institutes,
     categories,
   };
@@ -152,8 +154,16 @@ function prepare() {
     .map((i) => ({ code: i.code, name: i.name }));
   const codes = new Set(banks.map((b) => b.code));
 
-  const base = {};
-  for (const b of d.baseRates) if (codes.has(b.code)) base[b.code] = num(b.base_rate);
+  // base_rate and risk_rate (NPA ratio) come with flags saying whether the figure
+  // is still last period's (the bank hasn't published this period's yet).
+  const base = {}, npa = {}, baseOld = {}, npaOld = {};
+  for (const b of d.baseRates) {
+    if (!codes.has(b.code)) continue;
+    base[b.code] = num(b.base_rate);
+    npa[b.code] = num(b.risk_rate);
+    baseOld[b.code] = !!b.is_old_base_rate;
+    npaOld[b.code] = !!b.is_old_npa;
+  }
 
   const build = (cats, type) => cats.map((c) => {
     const cat = d.categories[c.url_key];
@@ -175,7 +185,8 @@ function prepare() {
   const model = {
     banks,
     nameOf: Object.fromEntries(banks.map((b) => [b.code, b.name])),
-    base,
+    base, npa, baseOld, npaOld,
+    updates: (d.updates || []).filter((u) => !/advertis/i.test(u.title)),
     loans: build(d.loanCategories, "loan"),
     deposits: build(d.depositCategories, "deposit").map((c) => ({ ...c, periods: buildPeriods(c) })),
   };
@@ -237,13 +248,13 @@ function bySegment(cats, segments) {
 function buildRows() {
   const m = state.model;
   const rows = [];
-  const add = (section, segment, product, variant, cellList) => {
+  const add = (section, segment, product, variant, cellList, key) => {
     const cells = {};
     for (const c of cellList) cells[c.code] = c;
     if (!cellList.length) return;
     const lowerIsBetter = section === "loan";
     const values = Object.fromEntries(cellList.map((c) => [c.code, c.value]));
-    rows.push({ section, segment, product, variant, cells, lowerIsBetter, s: standing(values, lowerIsBetter) });
+    rows.push({ key, section, segment, product, variant, cells, lowerIsBetter, s: standing(values, lowerIsBetter) });
   };
 
   for (const [segment, cats] of bySegment(m.loans, LOAN_SEGMENTS)) {
@@ -252,17 +263,17 @@ function buildRows() {
         add("loan", segment, c.title, kind === "fixed" ? "Fixed" : "Variable",
           Object.values(c.rows).filter((r) => hasRange(r[kind])).map((r) => ({
             code: r.code, range: r[kind], value: r[kind].lo, products: r.products.filter((p) => p.fixed === (kind === "fixed")),
-          })));
+          })), c.key);
       }
     }
   }
 
   const depCell = (r) => ({ code: r.code, range: r.all, value: r.all.hi, products: r.products });
   for (const c of m.deposits.filter((c) => c.periods)) {
-    for (const p of c.periods) add("deposit", `${c.title} by tenure`, p.label, null, Object.values(p.rows).map(depCell));
+    for (const p of c.periods) add("deposit", `${c.title} by tenure`, p.label, null, Object.values(p.rows).map(depCell), c.key);
   }
   for (const [segment, cats] of bySegment(m.deposits.filter((c) => !c.periods), DEPOSIT_SEGMENTS)) {
-    for (const c of cats) add("deposit", segment, c.title, null, Object.values(c.rows).map(depCell));
+    for (const c of cats) add("deposit", segment, c.title, null, Object.values(c.rows).map(depCell), c.key);
   }
   return rows;
 }
@@ -277,9 +288,13 @@ const rowLabel = (r) => r.segment.endsWith(" by tenure") ? `${r.segment.replace(
   : r.product + (r.variant === "Fixed" ? " (fixed)" : "");
 
 function rateHtml(r, mode) {
+  if (mode === "premium") return r.lo === r.hi ? `+${r.lo.toFixed(2)}` : `+${r.lo.toFixed(2)}<span class="to">–</span>${r.hi.toFixed(2)}`;
   if (mode === "single" || r.lo === r.hi) return pct(mode === "single" ? r.single : r.lo);
   return `${r.lo.toFixed(2)}<span class="to">–</span>${pct(r.hi)}`;
 }
+
+// "new" marker for banks that have already published this period's base rate.
+const freshTag = (code) => (state.model.baseOld[code] === false ? `<span class="fresh" title="New base rate published this period">new</span>` : "");
 
 // One rule everywhere: ▲ green = NMB ahead, ▼ red = NMB behind, by the gap in pp.
 // diff = other − NMB (other = a competitor's rate, or the market average).
@@ -307,7 +322,26 @@ function render() {
   renderScorecard("deposit");
   renderGrid("loan");
   renderGrid("deposit");
+  renderBanks();
+  renderUpdates();
   fitGrids();
+}
+
+function renderUpdates() {
+  const m = state.model;
+  const fresh = m.banks.filter((b) => m.baseOld[b.code] === false).length;
+  const items = m.updates.slice(0, 3).map((u) =>
+    `<span class="upd"><b>${esc(u.title)}</b> <span class="dim">${esc(u.updated_at || "")}</span></span>`);
+  if (fresh && fresh < m.banks.length) items.push(`<span class="upd"><b>${fresh} of ${m.banks.length}</b> banks have published this period's base rate <span class="dim">(marked <span class="fresh">new</span>)</span></span>`);
+  $("updates").innerHTML = items.length ? `<span class="upd-label">Latest from BankByaj</span>${items.join("")}` : "";
+  $("updates").hidden = !items.length;
+}
+
+function npaKpi() {
+  const s = standing({ ...state.model.npa }, true);
+  if (!s || s.nmb === null) return "";
+  return `<div class="kpi"><div class="k-label">NPA ratio</div><div class="k-value">${pct(s.nmb)}</div>
+    <div class="k-note">Rank ${s.rank} of ${s.n} (lowest first) · market avg ${pct(s.avg)} ${arrow(s.avg - s.nmb, true, "the market average")}</div></div>`;
 }
 
 function renderKpis() {
@@ -324,6 +358,7 @@ function renderKpis() {
     `<div class="kpi ${cls}"><div class="k-label">${label}</div><div class="k-value">${value}</div><div class="k-note">${note}</div></div>`;
   $("kpis").innerHTML = [
     kpi("Base rate", pct(base.nmb), `Rank ${base.rank} of ${base.n} (lowest first) · market avg ${pct(base.avg)}`, "featured"),
+    npaKpi(),
     kpi("Deposits paying above market avg", `${depWins}<small>/${deps.length}</small>`, "deposit lines NMB offers, by top rate"),
     kpi("Lending priced below market avg", `${loanWins}<small>/${loans.length}</small>`, "loan lines NMB offers, by lowest rate"),
     kpi("Market-leading rates", `${leads.length}`, leads.length ? esc(leadText.slice(0, 3).join(" · ") + (leads.length > 3 ? ` +${leads.length - 3}` : "")) : "None today"),
@@ -391,20 +426,33 @@ function orderedBanks() {
 
 // Grid: product lines down, banks across. Product, NMB and Rank columns are pinned;
 // bank headers (with base rate) are pinned on top.
+// Premium view: every loan rate minus that bank's base rate, re-ranked on the premium.
+function toPremium(r) {
+  const base = state.model.base;
+  const cells = {};
+  for (const [code, c] of Object.entries(r.cells)) {
+    const b = base[code];
+    if (b === undefined || b === null) continue;
+    cells[code] = { ...c, range: { lo: c.range.lo - b, hi: c.range.hi - b, count: c.range.count }, value: c.value - b };
+  }
+  return { ...r, cells, s: standing(Object.fromEntries(Object.entries(cells).map(([k, c]) => [k, c.value])), true) };
+}
+
 function renderGrid(section) {
   const m = state.model;
-  const rows = state.rows.filter((r) => r.section === section);
+  const mode = state.show[section];
+  const rows = state.rows.filter((r) => r.section === section).map((r) => (mode === "premium" ? toPremium(r) : r));
   const cols = orderedBanks();
   const others = cols.slice(1);
-  const mode = state.show;
   const nmbBase = m.base[NMB];
+  const unit = (v) => (mode === "premium" ? `+${v.toFixed(2)}` : pct(v));
 
   let head = `<thead><tr>
     <th class="pin c1">Product</th>
-    <th class="pin c2 nmb"><img src="assets/nmb-logo-white.png" alt="NMB Bank" class="nmb-logo"><div class="b-base">Base <b>${pct(nmbBase)}</b></div></th>
+    <th class="pin c2 nmb"><img src="assets/nmb-logo-white.png" alt="NMB Bank" class="nmb-logo"><div class="b-base">Base <b>${pct(nmbBase)}</b>${freshTag(NMB)}</div></th>
     <th class="pin c3">Rank<div class="b-base">best in market</div></th>`;
   for (const b of others) {
-    head += `<th><div class="b-name">${bankLabel(b.code)}</div><div class="b-base">Base <b>${pct(m.base[b.code])}</b> ${arrow(m.base[b.code] - nmbBase, true)}</div></th>`;
+    head += `<th><div class="b-name">${bankLabel(b.code)}</div><div class="b-base">Base <b>${pct(m.base[b.code])}</b>${freshTag(b.code)} ${arrow(m.base[b.code] - nmbBase, true)}</div></th>`;
   }
   head += `</tr></thead>`;
 
@@ -420,14 +468,18 @@ function renderGrid(section) {
     const s = r.s;
     const best = r.lowerIsBetter ? s.min : s.max;
     const nmb = r.cells[NMB];
-    const tip = (c) => esc(c.products.map((p) => `${p.name}: ${p.rate.lo === p.rate.hi ? pct(p.rate.lo) : pct(p.rate.lo) + " – " + pct(p.rate.hi)}`).join("\n"));
+    const tip = (c) => esc(c.products.map((p) => {
+      const extra = [p.processing_fee && `fee ${p.processing_fee}`, p.minimum_balance && p.minimum_balance !== "0" && `min. balance ${p.minimum_balance}`,
+        p.max_tenure && p.max_tenure !== "-" && `tenure ${p.max_tenure}`].filter(Boolean).join(", ");
+      return `${p.name}: ${p.rate.lo === p.rate.hi ? pct(p.rate.lo) : pct(p.rate.lo) + " – " + pct(p.rate.hi)}${extra ? ` (${extra})` : ""}`;
+    }).join("\n"));
     const cellRange = (c) => ({ ...c.range, single: c.value });
-    const star = (c) => (Math.abs(c.value - best) < 0.005 ? `<span class="star" title="Best rate in market">★</span>` : "");
+    const star = (c) => (Math.abs(c.value - best) < 0.005 ? `<span class="star" title="Best in market">★</span>` : "");
 
     body += `<tr class="${r.variant === "Fixed" ? "sub" : ""}">
       <td class="pin c1">${r.variant === "Fixed" ? `<span class="tag">Fixed</span>` : esc(r.product)}${r.variant === "Variable" ? `<span class="var">variable</span>` : ""}</td>
       <td class="pin c2 nmb" ${nmb ? `title="${tip(nmb)}"` : ""}>${nmb ? `<div class="rate">${rateHtml(cellRange(nmb), mode)}${star(nmb)}</div>` : '<span class="na">Not offered</span>'}</td>
-      <td class="pin c3"><div class="rank">${s.rank ? `${s.rank}<span>/${s.n}</span>` : '<span class="na">—</span>'}</div><div class="best">${pct(best)}</div></td>`;
+      <td class="pin c3"><div class="rank">${s.rank ? `${s.rank}<span>/${s.n}</span>` : '<span class="na">—</span>'}</div><div class="best">${unit(best)}</div></td>`;
     for (const b of others) {
       const c = r.cells[b.code];
       if (!c) { body += `<td><span class="na">—</span></td>`; continue; }
@@ -438,7 +490,7 @@ function renderGrid(section) {
   $(`${section}-table`).innerHTML = head + `<tbody>${body}</tbody>`;
   $(`${section}-jump`).innerHTML = segments.map(([name, id]) => `<button type="button" data-jump="${id}">${esc(name)}</button>`).join("");
 
-  const csv = [["Segment", "Product", "Variant", "NMB rank", "Market best", ...cols.map((b) => b.name), ...others.map((b) => `${b.name} minus NMB (pp)`)]];
+  const csv = [[mode === "premium" ? "Premium over base rate (pp)" : "Rate (%)"], ["Segment", "Product", "Variant", "NMB rank", "Market best", ...cols.map((b) => b.name), ...others.map((b) => `${b.name} minus NMB (pp)`)]];
   csv.push(["", "Base rate", "", "", "", ...cols.map((b) => m.base[b.code]?.toFixed(2) ?? ""), ...others.map((b) => m.base[b.code] !== undefined ? (m.base[b.code] - nmbBase).toFixed(2) : "")]);
   for (const r of rows) {
     const nmb = r.cells[NMB];
@@ -447,6 +499,79 @@ function renderGrid(section) {
       ...cols.map((b) => fmt(r.cells[b.code])), ...others.map((b) => (r.cells[b.code] && nmb ? (r.cells[b.code].value - nmb.value).toFixed(2) : ""))]);
   }
   state.csv[section] = csv;
+}
+
+// Bank profiles: one row per bank, key metrics as columns. NMB first, then the
+// others A–Z or sorted best-first on a chosen metric.
+function bankMetrics() {
+  const m = state.model;
+  const row = (key, product, variant) => state.rows.find((r) => r.key === key && r.product === product && (!variant || r.variant === variant));
+  const valueOf = (r) => (r ? (code) => r.cells[code]?.value ?? null : () => null);
+  const fd1 = valueOf(row("fd-individual", "1 year"));
+  const fdRows = state.rows.filter((r) => r.key === "fd-individual");
+  const sav = valueOf(state.rows.find((r) => r.key === "current-savings"));
+  const homeRow = state.rows.find((r) => r.key === "home-loan-nepali-banks" && r.variant === "Variable");
+  const home = valueOf(homeRow);
+  const count = (section) => (code) => state.rows.filter((r) => r.section === section && r.cells[code]).length;
+  return [
+    { key: "base", label: "Base rate", note: "lower is better", lower: true, get: (c) => m.base[c] ?? null, tag: freshTag },
+    { key: "npa", label: "NPA ratio", note: "non-performing loans", lower: true, get: (c) => m.npa[c] ?? null },
+    { key: "fd1", label: "Fixed deposit 1 yr", note: "rate", lower: false, get: fd1 },
+    { key: "fdtop", label: "Best fixed deposit", note: "any tenure", lower: false, get: (c) => { const v = fdRows.map((r) => r.cells[c]?.value).filter((x) => x !== undefined); return v.length ? Math.max(...v) : null; } },
+    { key: "sav", label: "Savings top rate", note: "saving account", lower: false, get: sav },
+    { key: "home", label: "Home loan from", note: "lowest variable", lower: true, get: home },
+    { key: "prem", label: "Home loan premium", note: "over base rate", lower: true, unit: "pp", get: (c) => { const h = home(c), b = m.base[c]; return h === null || b === undefined ? null : h - b; } },
+    { key: "lines", label: "Products", note: "deposit / loan lines", count: true,
+      get: (c) => count("deposit")(c) + count("loan")(c), show: (c) => `${count("deposit")(c)} / ${count("loan")(c)}` },
+  ];
+}
+
+function renderBanks() {
+  const m = state.model;
+  const metrics = bankMetrics();
+  const fmt = (mt, v, code) => (v === null || v === undefined ? '<span class="na">—</span>' : mt.show && code ? mt.show(code) : mt.count ? String(v) : mt.unit === "pp" ? `+${v.toFixed(2)}` : pct(v));
+  const stats = Object.fromEntries(metrics.filter((mt) => !mt.count).map((mt) =>
+    [mt.key, standing(Object.fromEntries(m.banks.map((b) => [b.code, mt.get(b.code)])), mt.lower)]));
+
+  const others = m.banks.filter((b) => b.code !== NMB);
+  const sortMt = metrics.find((mt) => mt.key === state.bankSort);
+  if (sortMt) {
+    const dir = sortMt.count ? -1 : sortMt.lower ? 1 : -1;
+    others.sort((a, b) => {
+      const va = sortMt.get(a.code), vb = sortMt.get(b.code);
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return (va - vb) * dir || a.name.localeCompare(b.name);
+    });
+  } else others.sort((a, b) => a.name.localeCompare(b.name));
+  const list = [m.banks.find((b) => b.code === NMB), ...others].filter(Boolean);
+
+  let head = `<thead><tr><th class="sortable ${state.bankSort ? "" : "on"}"><button type="button" data-bsort="">Bank</button></th>`;
+  for (const mt of metrics) {
+    const s = stats[mt.key];
+    head += `<th class="num sortable ${state.bankSort === mt.key ? "on" : ""}"><button type="button" data-bsort="${mt.key}" title="Sort best first">${esc(mt.label)}${state.bankSort === mt.key ? " ↓" : ""}</button>
+      <div class="th-note">${esc(mt.note)}</div>${s && s.rank ? `<div class="th-rank">NMB ${s.rank}/${s.n}</div>` : ""}</th>`;
+  }
+  head += `</tr></thead>`;
+
+  let body = "";
+  for (const b of list) {
+    const me = b.code === NMB;
+    body += `<tr class="${me ? "nmb-row" : ""}"><td class="bank">${me ? `<img src="assets/nmb-logo.png" alt="" class="row-logo">` : ""}${bankLabel(b.code)}</td>`;
+    for (const mt of metrics) {
+      const v = mt.get(b.code), nv = mt.get(NMB), s = stats[mt.key];
+      const best = s && v !== null && Math.abs(v - (mt.lower ? s.min : s.max)) < 0.005 ? `<span class="star" title="Best in market">★</span>` : "";
+      const cmp = me || mt.count || v === null || nv === null ? "" : arrow(v - nv, mt.lower);
+      body += `<td class="num"><span class="val">${fmt(mt, v, b.code)}</span>${mt.tag ? mt.tag(b.code) : ""}${best}${cmp ? `<div>${cmp}</div>` : ""}</td>`;
+    }
+    body += `</tr>`;
+  }
+  const avg = metrics.map((mt) => (stats[mt.key] ? `<td class="num">${fmt(mt, stats[mt.key].avg)}</td>` : `<td></td>`)).join("");
+  body += `<tr class="avg-row"><td class="bank">Market average</td>${avg}</tr>`;
+  $("banks-table").innerHTML = head + `<tbody>${body}</tbody>`;
+
+  state.csv.banks = [["Bank", ...metrics.map((mt) => `${mt.label} (${mt.note})`)],
+    ...list.map((b) => [m.nameOf[b.code], ...metrics.map((mt) => { const v = mt.get(b.code); return v === null ? "" : mt.show ? mt.show(b.code) : mt.count ? v : v.toFixed(2); })])];
 }
 
 // Grids fill the window from their top edge down.
@@ -495,7 +620,16 @@ document.addEventListener("click", (e) => {
   if (t.dataset.tab) { e.preventDefault(); return showTab(t.dataset.tab); }
   if (t.dataset.csv) return downloadCsv(t.dataset.csv);
   if (t.dataset.order) { state.order = t.dataset.order; setToggle("order", state.order); renderGrid("loan"); renderGrid("deposit"); return; }
-  if (t.dataset.show) { state.show = t.dataset.show; setToggle("show", state.show); renderGrid("loan"); renderGrid("deposit"); return; }
+  if (t.dataset.show) {
+    const section = t.closest(".panel").id.replace("tab-", "");
+    state.show[section] = t.dataset.show;
+    t.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
+    return renderGrid(section);
+  }
+  if (t.dataset.bsort) {
+    state.bankSort = state.bankSort === t.dataset.bsort ? null : t.dataset.bsort;
+    return renderBanks();
+  }
   if (t.dataset.jump) {
     const row = $(t.dataset.jump), wrap = row.closest(".grid-wrap");
     wrap.scrollTo({ top: row.offsetTop - wrap.querySelector("thead").offsetHeight, behavior: "smooth" });
@@ -505,8 +639,8 @@ $("refresh").addEventListener("click", load);
 window.addEventListener("resize", fitGrids);
 
 state.order = "az";
-state.show = "range";
+state.show = { loan: "range", deposit: "range" };
 const initial = location.hash.slice(1);
-if (["summary", "loan", "deposit"].includes(initial)) showTab(initial);
+if (["summary", "loan", "deposit", "banks"].includes(initial)) showTab(initial);
 load();
 setInterval(() => { if (!document.hidden) load(); }, AUTO_REFRESH_MS);
