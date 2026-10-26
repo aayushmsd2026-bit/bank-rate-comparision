@@ -340,6 +340,7 @@ function render() {
   renderScorecard("deposit");
   renderGrid("loan");
   renderGrid("deposit");
+  renderBaseTab();
   renderBanks();
   renderUpdates();
   fitGrids();
@@ -510,6 +511,78 @@ function renderGrid(section) {
   $(`${section}-jump`).innerHTML = segments.map(([name, id]) => `<button type="button" data-jump="${id}">${esc(name)}</button>`).join("");
 }
 
+// "0.46 pp below NMB" — a plain statement of a bank's figure relative to NMB's.
+function vsNmbWords(d, what = "figure") {
+  if (d === null || d === undefined || !Number.isFinite(d)) return "";
+  if (Math.abs(d) < 0.005) return `<div class="b-vs">same as NMB</div>`;
+  const gap = Math.abs(d).toFixed(2);
+  return `<div class="b-vs" title="This bank's ${what} is ${gap} percentage points ${d < 0 ? "lower" : "higher"} than NMB's">${gap} pp ${d < 0 ? "below" : "above"} NMB</div>`;
+}
+
+const scripOf = (code) => SCRIP[code] || state.model.nameOf[code];
+
+// Base rate analysis: headline figures, a ranked bar chart and a bank × bank matrix.
+function renderBaseTab() {
+  const m = state.model;
+  const list = m.banks.filter((b) => m.base[b.code] !== undefined && m.base[b.code] !== null)
+    .map((b) => ({ ...b, v: m.base[b.code] })).sort((a, b) => a.v - b.v || a.name.localeCompare(b.name));
+  if (!list.length) return;
+  const vals = list.map((b) => b.v);
+  const s = standing({ ...m.base }, true);
+  const sorted = [...vals].sort((a, b) => a - b);
+  const median = sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+  const nmb = m.base[NMB];
+  const lowest = list[0], highest = list[list.length - 1];
+  const fresh = list.filter((b) => m.baseOld[b.code] === false);
+
+  const kpi = (label, value, note, cls = "") =>
+    `<div class="kpi ${cls}"><div class="k-label">${label}</div><div class="k-value">${value}</div><div class="k-note">${note}</div></div>`;
+  $("base-kpis").innerHTML = [
+    kpi("NMB base rate", pct(nmb), `${ordinal(s.rank)} lowest of ${s.n} banks`, "featured"),
+    kpi("Market average", pct(s.avg), `NMB is ${Math.abs(nmb - s.avg).toFixed(2)} pp ${nmb >= s.avg ? "above" : "below"} the average · median ${pct(median)}`),
+    kpi("Lowest", pct(lowest.v), `${esc(lowest.name)} · ${Math.abs(nmb - lowest.v).toFixed(2)} pp below NMB`),
+    kpi("Highest", pct(highest.v), `${esc(highest.name)} · ${Math.abs(highest.v - nmb).toFixed(2)} pp ${highest.v >= nmb ? "above" : "below"} NMB`),
+    kpi("Published this period", `${fresh.length}<small> of ${list.length}</small>`, fresh.length ? `New base rate from ${esc(fresh.map((b) => b.name).join(", "))}; others show last period's` : "All banks still show last period's base rate"),
+  ].join("");
+
+  // Ranked bars: the scale starts just below the lowest rate so differences are visible.
+  const lo = Math.floor((sorted[0] - 0.3) * 10) / 10, hi = sorted[sorted.length - 1];
+  const at = (v) => (((v - lo) / (hi - lo)) * 100).toFixed(1);
+  $("base-bars").innerHTML = list.map((b, i) => {
+    const me = b.code === NMB;
+    return `<div class="bar-row ${me ? "me" : ""}">
+      <span class="bar-rank">${i + 1}</span>
+      <span class="bar-name" title="${esc(b.name)}">${esc(b.name)}${freshTag(b.code)}</span>
+      <span class="bar-track"><i class="bar-fill" style="width:${at(b.v)}%"></i><i class="bar-avg" style="left:${at(s.avg)}%" title="Market average ${pct(s.avg)}"></i></span>
+      <span class="bar-val">${pct(b.v)}</span>
+      <span class="bar-vs">${me ? "NMB" : vsNmbWords(b.v - nmb, "base rate").replace(/<\/?div[^>]*>/g, "")}</span>
+    </div>`;
+  }).join("") + `<div class="bar-axis"><span></span><span></span><span class="bar-track"><i class="bar-avg-key" style="left:${at(s.avg)}%">avg ${pct(s.avg)}</i></span><span></span><span></span></div>`;
+
+  // Matrix: cell = row bank's base rate − column bank's base rate.
+  const maxAbs = Math.max(...vals) - Math.min(...vals) || 1;
+  const shade = (d) => {
+    if (Math.abs(d) < 0.005) return "";
+    const a = (0.12 + 0.6 * Math.min(1, Math.abs(d) / maxAbs)).toFixed(2);
+    return d < 0 ? `background: rgba(0,142,176,${a})` : `background: rgba(217,154,6,${a})`;
+  };
+  let head = `<thead><tr><th class="mx-corner">Row − column<br><span>(pp)</span></th>`;
+  for (const c of list) head += `<th class="${c.code === NMB ? "me" : ""}" title="${esc(c.name)} · ${pct(c.v)}"><div>${esc(scripOf(c.code))}</div><span>${pct(c.v)}</span></th>`;
+  head += `</tr></thead>`;
+  let body = "";
+  for (const r of list) {
+    body += `<tr class="${r.code === NMB ? "me" : ""}"><th title="${esc(r.name)}"><div>${esc(scripOf(r.code))}</div><span>${pct(r.v)}</span></th>`;
+    for (const c of list) {
+      const d = r.v - c.v;
+      const cls = [r.code === c.code ? "diag" : "", c.code === NMB ? "me-col" : ""].join(" ");
+      const tip = r.code === c.code ? esc(r.name) : `${esc(r.name)} (${pct(r.v)}) is ${Math.abs(d).toFixed(2)} pp ${d < 0 ? "below" : d > 0 ? "above" : "level with"} ${esc(c.name)} (${pct(c.v)})`;
+      body += `<td class="${cls}" style="${r.code === c.code ? "" : shade(d)}" title="${tip}">${r.code === c.code ? "" : Math.abs(d) < 0.005 ? "0" : (d > 0 ? "+" : "−") + Math.abs(d).toFixed(2)}</td>`;
+    }
+    body += `</tr>`;
+  }
+  $("base-matrix").innerHTML = head + `<tbody>${body}</tbody>`;
+}
+
 // Bank profiles: one row per bank, key metrics as columns. NMB first, then the
 // others A–Z or sorted best-first on a chosen metric.
 function bankMetrics() {
@@ -570,8 +643,8 @@ function renderBanks() {
     for (const mt of metrics) {
       const v = mt.get(b.code), nv = mt.get(NMB), s = stats[mt.key];
       const best = s && v !== null && Math.abs(v - (mt.lower ? s.min : s.max)) < 0.005 ? `<span class="star" title="Best in market">★</span>` : "";
-      const cmp = me || mt.count || v === null || nv === null ? "" : arrow(v - nv, mt.lower);
-      body += `<td class="num"><span class="val">${fmt(mt, v, b.code)}</span>${mt.tag ? mt.tag(b.code) : ""}${best}${cmp ? `<div>${cmp}</div>` : ""}</td>`;
+      const cmp = me || mt.count || v === null || nv === null ? "" : vsNmbWords(v - nv, mt.label);
+      body += `<td class="num"><span class="val">${fmt(mt, v, b.code)}</span>${mt.tag ? mt.tag(b.code) : ""}${best}${cmp}</td>`;
     }
     body += `</tr>`;
   }
@@ -604,7 +677,8 @@ const XL = {
 const PCT = "0.00%";
 const PP = '+0.00" pp";-0.00" pp";0.00" pp"';
 const GAP = '"▲ "0.00;"▼ "0.00;"="';
-const SHEET_FOR_TAB = { summary: "Overview", deposit: "Deposits", loan: "Lending", banks: "Banks" };
+const DIFF = '0.00" pp above NMB";0.00" pp below NMB";"same as NMB"';
+const SHEET_FOR_TAB = { summary: "Overview", deposit: "Deposits", loan: "Lending", base: "Base rate", banks: "Banks" };
 
 let excelLib = null;
 function loadExcelJS() {
@@ -791,15 +865,96 @@ function addGridSheet(wb, section) {
     widths: [...(isLoan ? [24, 20, 10] : [26, 20]), 9, 7, 11, 11, 13, ...banks.slice(1).map(() => 13)] });
 }
 
+function addBaseSheet(wb) {
+  const m = state.model;
+  const ws = wb.addWorksheet("Base rate", { properties: { tabColor: { argb: XL.teal } } });
+  const list = m.banks.filter((b) => m.base[b.code] !== undefined && m.base[b.code] !== null)
+    .map((b) => ({ ...b, v: m.base[b.code] })).sort((a, b) => a.v - b.v || a.name.localeCompare(b.name));
+  const nmb = m.base[NMB];
+  const s = standing({ ...m.base }, true);
+  const n = list.length;
+  const lastCol = Math.max(7, n + 1);
+  sheetTitle(ws, "Base rate analysis", lastCol);
+
+  // Ranking
+  const cols = ["Rank", "Bank", "Symbol", "Base rate", "Difference vs NMB", "Difference vs market average", "Published this period"];
+  const H = 4;
+  headerRow(ws, H, cols, { textCols: 3 });
+  list.forEach((b, i) => {
+    const x = ws.getRow(H + 1 + i);
+    x.values = [i + 1, b.name, scripOf(b.code), asPct(b.v), b.code === NMB ? null : asNum(b.v - nmb), asNum(b.v - s.avg), m.baseOld[b.code] === false ? "Yes" : "No"];
+    x.getCell(4).numFmt = PCT;
+    x.getCell(5).numFmt = DIFF;
+    x.getCell(6).numFmt = '0.00" pp above avg";0.00" pp below avg";"at average"';
+    if (b.code === NMB) for (let c = 1; c <= cols.length; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.tealInk } }; }
+  });
+  const end = H + n;
+  styleBody(ws, H + 1, end, cols.length, { textCols: 3, band: true });
+  const stats = [["Market average", s.avg], ["Lowest", s.min], ["Highest", s.max]];
+  stats.forEach(([label, v], i) => {
+    const x = ws.getRow(end + 2 + i);
+    x.getCell(2).value = label; x.getCell(2).font = { bold: true, size: 10, color: { argb: XL.muted } };
+    x.getCell(4).value = asPct(v); x.getCell(4).numFmt = PCT; x.getCell(4).font = { bold: true, size: 10, color: { argb: XL.muted } };
+    x.getCell(4).alignment = { horizontal: "center" };
+  });
+
+  // Matrix: row bank's base rate − column bank's base rate
+  const M = end + 7;
+  ws.mergeCells(M - 2, 1, M - 2, lastCol);
+  ws.getCell(M - 2, 1).value = "Base rate matrix — each cell = row bank's base rate − column bank's base rate, in percentage points (blue = row bank lower, amber = row bank higher)";
+  ws.getCell(M - 2, 1).font = { bold: true, size: 11, color: { argb: XL.ink } };
+  const hdr = ws.getRow(M);
+  hdr.getCell(1).value = "Row − column";
+  list.forEach((c, j) => { hdr.getCell(2 + j).value = scripOf(c.code); });
+  for (let j = 1; j <= n + 1; j++) {
+    const cell = hdr.getCell(j);
+    const me = j > 1 && list[j - 2].code === NMB;
+    cell.fill = fill(me ? XL.tealInk : XL.teal);
+    cell.font = { bold: true, size: 9, color: { argb: XL.white } };
+    cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  }
+  hdr.height = 28;
+  const maxAbs = (s.max - s.min) || 1;
+  const tint = (d) => {
+    const t = Math.min(1, Math.abs(d) / maxAbs);
+    const mix = (a, b) => Math.round(a + (b - a) * (0.15 + 0.6 * t)).toString(16).padStart(2, "0");
+    return d < 0 ? `FF${mix(255, 0)}${mix(255, 142)}${mix(255, 176)}` : `FF${mix(255, 217)}${mix(255, 154)}${mix(255, 6)}`;
+  };
+  list.forEach((r, i) => {
+    const x = ws.getRow(M + 1 + i);
+    const rowMe = r.code === NMB;
+    x.getCell(1).value = `${scripOf(r.code)} (${pct(r.v)})`;
+    x.getCell(1).font = { bold: true, size: 9, color: { argb: rowMe ? XL.white : XL.ink } };
+    x.getCell(1).fill = fill(rowMe ? XL.tealInk : XL.tint);
+    list.forEach((c, j) => {
+      const cell = x.getCell(2 + j);
+      cell.alignment = { horizontal: "center" };
+      cell.border = { top: { style: "hair", color: { argb: XL.hair } }, left: { style: "hair", color: { argb: XL.hair } } };
+      if (r.code === c.code) { cell.fill = fill("FFE2E8F0"); return; }
+      const d = r.v - c.v;
+      cell.value = asNum(d);
+      cell.numFmt = '+0.00;-0.00;0';
+      if (Math.abs(d) >= 0.005) cell.fill = fill(tint(d));
+      cell.font = { size: 9, bold: rowMe || c.code === NMB, color: { argb: XL.ink } };
+    });
+  });
+  ws.getColumn(1).width = 16;
+  ws.getColumn(2).width = 26;
+  for (let j = 3; j <= n + 1; j++) ws.getColumn(j).width = Math.max(ws.getColumn(j).width || 0, j <= 7 ? 14 : 8.5);
+  ws.views = [{ state: "frozen", ySplit: H, showGridLines: false }];
+  ws.autoFilter = { from: { row: H, column: 1 }, to: { row: end, column: cols.length } };
+  ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9 };
+}
+
 function addBanksSheet(wb) {
   const m = state.model;
   const ws = wb.addWorksheet("Banks", { properties: { tabColor: { argb: XL.teal } } });
   const metrics = bankMetrics().filter((mt) => !mt.count);
   const count = (sec, code) => state.rows.filter((r) => r.section === sec && r.cells[code]).length;
-  const cols = ["Bank", ...metrics.flatMap((mt) => [`${mt.label} (${mt.note})`, `${mt.label} vs NMB`]), "New base rate this period", "Deposit lines", "Loan lines"];
+  const cols = ["Bank", ...metrics.flatMap((mt) => [`${mt.label} (${mt.note})`, `${mt.label}: bank − NMB`]), "New base rate this period", "Deposit lines", "Loan lines"];
   sheetTitle(ws, "Bank profiles", cols.length);
   ws.mergeCells(3, 1, 3, cols.length);
-  ws.getCell(3, 1).value = "'vs NMB' columns: ▲ green = NMB ahead of that bank, ▼ red = NMB behind (percentage points). NPL = non-performing (bad) loans as a share of total loans.";
+  ws.getCell(3, 1).value = "'bank − NMB' columns compare each bank's figure with NMB's (e.g. '4.42 pp below NMB' = that bank's figure is 4.42 percentage points lower than NMB's). NPL = non-performing (bad) loans as a share of total loans.";
   ws.getCell(3, 1).font = { size: 9, italic: true, color: { argb: XL.muted } };
   const H = 5;
   headerRow(ws, H, cols, { height: 44 });
@@ -815,7 +970,10 @@ function addBanksSheet(wb) {
     metrics.forEach((mt, i) => {
       x.getCell(2 + i * 2).numFmt = mt.unit === "pp" ? PP : PCT;
       const v = mt.get(b.code), nv = mt.get(NMB);
-      gapCell(x.getCell(3 + i * 2), me || v === null || nv === null ? null : advantage(v - nv, mt.lower));
+      const dc = x.getCell(3 + i * 2);
+      dc.value = me || v === null || nv === null ? null : asNum(v - nv);
+      dc.numFmt = DIFF;
+      dc.font = { size: 10, color: { argb: XL.muted } };
     });
     if (me) for (let c = 1; c <= cols.length; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.tealInk } }; }
   }
@@ -872,7 +1030,7 @@ function addNotesSheet(wb) {
   const ws = wb.addWorksheet("Notes", { properties: { tabColor: { argb: XL.muted } } });
   sheetTitle(ws, "How to read this workbook", 2);
   const notes = [
-    ["Sheets", "Overview: headline figures and NMB's rank, market best/average/worst for every product.\nDeposits / Lending: every bank's rate per product, NMB first, base rates above the header.\nBanks: base rate, NPL and key rates per bank.\nAll rates: one row per bank and product, with ranges and premiums, for filtering and pivot tables."],
+    ["Sheets", "Overview: headline figures and NMB's rank, market best/average/worst for every product.\nDeposits / Lending: every bank's rate per product, NMB first, base rates above the header.\nBase rate: ranking and a bank-by-bank base rate matrix.\nBanks: base rate, NPL and key rates per bank.\nAll rates: one row per bank and product, with ranges and premiums, for filtering and pivot tables."],
     ["Compared rate", "Loans: each bank's lowest rate for the product (1 = cheapest). Deposits: each bank's highest rate (1 = pays most)."],
     ["Vs NMB / NMB vs average", "▲ green = NMB ahead (cheaper loan or higher deposit rate), ▼ red = NMB behind, in percentage points. = means level."],
     ["Fixed vs variable", "Loan products with \"Fixed\" in the name are fixed rate; all others variable. Special offer rates are used where listed."],
@@ -905,6 +1063,7 @@ async function downloadExcel(btn) {
     addOverviewSheet(wb);
     addGridSheet(wb, "deposit");
     addGridSheet(wb, "loan");
+    addBaseSheet(wb);
     addBanksSheet(wb);
     addDetailSheet(wb);
     addNotesSheet(wb);
@@ -967,6 +1126,6 @@ window.addEventListener("resize", fitGrids);
 state.order = "az";
 state.show = { loan: "premium", deposit: "range" };
 const initial = location.hash.slice(1);
-if (["summary", "loan", "deposit", "banks"].includes(initial)) showTab(initial);
+if (["summary", "loan", "deposit", "base", "banks"].includes(initial)) showTab(initial);
 load();
 setInterval(() => { if (!document.hidden) load(); }, AUTO_REFRESH_MS);

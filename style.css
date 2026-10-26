@@ -216,6 +216,42 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .banks tr.avg-row td { background: var(--bg); color: var(--muted); font-weight: 600; border-top: 1px solid var(--hair); }
 .banks tbody tr:not(.nmb-row):not(.avg-row):hover td { background: #FAFCFD; }
 
+/* ---------- base rate tab ---------- */
+#tab-base .card { margin-bottom: 16px; }
+.bars { padding: 6px 22px 18px; }
+.bar-row, .bar-axis { display: grid; grid-template-columns: 28px minmax(170px, 230px) 1fr 64px 150px; align-items: center; gap: 12px; padding: 5px 0; }
+.bar-row { border-bottom: 1px solid var(--hair-soft); font-size: .88rem; }
+.bar-rank { color: var(--faint); font-weight: 600; text-align: right; }
+.bar-name { font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { position: relative; height: 12px; }
+.bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #B9DCE7; border-radius: 3px; }
+.bar-row.me .bar-fill { background: var(--teal); }
+.bar-row.me { background: var(--teal-tint); border-radius: 8px; }
+.bar-row.me .bar-name, .bar-row.me .bar-val { color: var(--teal-ink); }
+.bar-avg { position: absolute; top: -5px; bottom: -5px; width: 2px; background: var(--ink); opacity: .45; }
+.bar-axis { border: 0; padding-top: 0; }
+.bar-avg-key { position: absolute; transform: translateX(-50%); font-size: .7rem; color: var(--muted); white-space: nowrap; font-style: normal; }
+.bar-val { font-weight: 700; text-align: right; font-family: var(--title); }
+.bar-vs { font-size: .78rem; color: var(--muted); white-space: nowrap; }
+.mx-wrap { overflow-x: auto; padding: 0 22px 20px; }
+.mx { border-collapse: separate; border-spacing: 2px; font-size: .78rem; margin: 0 auto; }
+.mx th, .mx td { text-align: center; padding: 6px 4px; min-width: 50px; border-radius: 4px; white-space: nowrap; }
+.mx thead th { font-weight: 700; color: var(--ink); background: var(--bg); vertical-align: bottom; }
+.mx th div { font-family: var(--title); font-weight: 800; font-size: .8rem; }
+.mx th span { display: block; font-weight: 500; font-size: .68rem; color: var(--muted); }
+.mx tbody th { text-align: left; background: var(--bg); padding-left: 8px; padding-right: 8px; }
+.mx .mx-corner { font-size: .66rem; color: var(--muted); font-weight: 600; text-align: left; background: transparent; }
+.mx td { color: var(--ink); font-variant-numeric: tabular-nums; cursor: default; }
+.mx td.diag { background: var(--hair-soft); }
+.mx thead th.me, .mx tbody tr.me th { background: var(--teal); color: #fff; }
+.mx thead th.me span, .mx tbody tr.me th span { color: rgba(255,255,255,.85); }
+.mx tr.me td, .mx td.me-col { font-weight: 700; box-shadow: inset 0 0 0 1.5px var(--teal); }
+.mx td:hover { outline: 2px solid var(--ink); }
+.key-sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin: 0 4px 0 10px; }
+.key-sw.low { background: rgba(0,142,176,.55); }
+.key-sw.high { background: rgba(217,154,6,.55); }
+.banks .b-vs { text-align: right; }
+
 /* ---------- footer ---------- */
 .foot { background: var(--ink); color: rgba(255,255,255,.7); font-size: .8rem; }
 .foot-inner { display: flex; gap: 28px; align-items: flex-start; padding: 26px var(--gutter); }
@@ -229,6 +265,8 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .cards2 { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
+  .bar-row, .bar-axis { grid-template-columns: 20px 1fr 54px; }
+  .bar-track, .bar-vs { display: none; }
   .nav { position: static; }
   .nav-inner { gap: 10px 16px; padding-top: 12px; padding-bottom: 0; }
   .brand-sep, .brand-text small { display: none; }
