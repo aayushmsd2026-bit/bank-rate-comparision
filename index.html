@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202610260417">
+  <link rel="stylesheet" href="style.css?v=202610260719">
 </head>
 <body>
   <header class="nav">
@@ -111,7 +111,7 @@
       <div class="head">
         <div>
           <h1>Lending rates</h1>
-          <p class="sub">Every commercial bank by product · <span class="stamp"></span></p>
+          <p class="sub"><b>Premium over base rate</b> = loan rate − that bank's base rate · <span class="stamp"></span></p>
         </div>
         <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
       </div>
@@ -119,9 +119,9 @@
         <div class="jump" id="loan-jump"></div>
         <div class="controls">
           <div class="toggle" role="group" aria-label="Rate shown">
-            <button type="button" data-show="range" aria-pressed="true">Range</button>
-            <button type="button" data-show="single" aria-pressed="false">Lowest</button>
-            <button type="button" data-show="premium" aria-pressed="false" title="Rate minus the bank's base rate">Premium</button>
+            <button type="button" data-show="premium" aria-pressed="true" title="Loan rate minus that bank's base rate">Premium</button>
+            <button type="button" data-show="range" aria-pressed="false">Rate range</button>
+            <button type="button" data-show="single" aria-pressed="false">Lowest rate</button>
           </div>
           <div class="toggle" role="group" aria-label="Bank order">
             <button type="button" data-order="az" aria-pressed="true">A–Z</button>
@@ -131,10 +131,10 @@
       </div>
       <div class="grid-wrap"><table id="loan-table" class="grid"></table></div>
       <p class="legend">
-        <span><b class="chg good">▲</b> NMB cheaper than this bank</span>
-        <span><b class="chg bad">▼</b> NMB dearer than this bank</span>
+        <span><b class="chg good">▲</b> NMB cheaper (lower premium) than this bank</span>
+        <span><b class="chg bad">▼</b> NMB dearer (higher premium) than this bank</span>
         <span><span class="star">★</span> Lowest in market</span>
-        <span>Gap compares lowest rates, in pp · hover a cell for product names</span>
+        <span>Column headings are NEPSE symbols (hover for the full name; RBB is not listed) · "0.46 pp below NMB" = that bank's base rate is 0.46 percentage points lower than ours · hover a cell for product names</span>
       </p>
     </section>
 
@@ -153,7 +153,7 @@
         <span><b class="chg bad">▼</b> NMB behind this bank</span>
         <span><span class="star">★</span> Best in market</span>
         <span><span class="fresh">new</span> base rate published this period; others show last period's</span>
-        <span>NPA = non-performing loans as a share of total loans, as reported to BankByaj</span>
+        <span>NPL = non-performing (bad) loans as a share of total loans</span>
       </p>
     </section>
   </main>
@@ -170,6 +170,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202610260417"></script>
+  <script src="app.js?v=202610260719"></script>
 </body>
 </html>

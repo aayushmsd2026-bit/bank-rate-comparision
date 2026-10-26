@@ -6,6 +6,16 @@ const API = "https://admin.bankbyaj.com/api/v1/";
 const NMB = "NMB Bank";             // institute_code used by BankByaj
 const AUTO_REFRESH_MS = 15 * 60 * 1000;
 
+// NEPSE share symbols, keyed by BankByaj institute_code. Rastriya Banijya Bank
+// is not listed on NEPSE, so it keeps its usual short name.
+const SCRIP = {
+  "Krishi Bikas": "ADBL", "Citizens Bank": "CZBIL", "Everest Bank": "EBL", "Global IME": "GBIME",
+  "Himalayan": "HBL", "Kumari Bank": "KBL", "Laxmi Sunrise": "LSL", "Machhapuchhre": "MBL",
+  "Nabil Bank": "NABIL", "Nepal Bank": "NBL", "NIMB": "NIMB", "Nepal SBI": "SBI", "NIC Asia": "NICA",
+  "NMB Bank": "NMB", "Prabhu Bank": "PRVU", "Prime Bank": "PCBL", "RBB": "RBB", "Sanima Bank": "SANIMA",
+  "Siddhartha": "SBL", "SCB": "SCB",
+};
+
 const state = { data: null, source: null, tab: "summary" };
 const $ = (id) => document.getElementById(id);
 
@@ -154,7 +164,7 @@ function prepare() {
     .map((i) => ({ code: i.code, name: i.name }));
   const codes = new Set(banks.map((b) => b.code));
 
-  // base_rate and risk_rate (NPA ratio) come with flags saying whether the figure
+  // base_rate and risk_rate (NPL ratio) come with flags saying whether the figure
   // is still last period's (the bank hasn't published this period's yet).
   const base = {}, npa = {}, baseOld = {}, npaOld = {};
   for (const b of d.baseRates) {
@@ -293,6 +303,14 @@ function rateHtml(r, mode) {
   return `${r.lo.toFixed(2)}<span class="to">–</span>${pct(r.hi)}`;
 }
 
+// Bank's base rate vs NMB's, in words: "0.46 pp below NMB".
+function baseVsNmb(v, nmbBase) {
+  if (v === null || v === undefined || nmbBase === null || nmbBase === undefined) return "";
+  const d = v - nmbBase;
+  if (Math.abs(d) < 0.005) return `<div class="b-vs">same as NMB</div>`;
+  return `<div class="b-vs" title="This bank's base rate is ${Math.abs(d).toFixed(2)} percentage points ${d < 0 ? "lower" : "higher"} than NMB's (${pct(nmbBase)})">${Math.abs(d).toFixed(2)} pp ${d < 0 ? "below" : "above"} NMB</div>`;
+}
+
 // "new" marker for banks that have already published this period's base rate.
 const freshTag = (code) => (state.model.baseOld[code] === false ? `<span class="fresh" title="New base rate published this period">new</span>` : "");
 
@@ -337,11 +355,13 @@ function renderUpdates() {
   $("updates").hidden = !items.length;
 }
 
-function npaKpi() {
+const ordinal = (n) => n + (["th", "st", "nd", "rd"][((n % 100) - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th");
+
+function nplKpi() {
   const s = standing({ ...state.model.npa }, true);
   if (!s || s.nmb === null) return "";
-  return `<div class="kpi"><div class="k-label">NPA ratio</div><div class="k-value">${pct(s.nmb)}</div>
-    <div class="k-note">Rank ${s.rank} of ${s.n} (lowest first) · market avg ${pct(s.avg)} ${arrow(s.avg - s.nmb, true, "the market average")}</div></div>`;
+  return `<div class="kpi"><div class="k-label">NPL ratio (bad loans)</div><div class="k-value">${pct(s.nmb)}</div>
+    <div class="k-note">${ordinal(s.rank)} lowest of ${s.n} banks · market average ${pct(s.avg)}</div></div>`;
 }
 
 function renderKpis() {
@@ -357,11 +377,15 @@ function renderKpis() {
   const kpi = (label, value, note, cls = "") =>
     `<div class="kpi ${cls}"><div class="k-label">${label}</div><div class="k-value">${value}</div><div class="k-note">${note}</div></div>`;
   $("kpis").innerHTML = [
-    kpi("Base rate", pct(base.nmb), `Rank ${base.rank} of ${base.n} (lowest first) · market avg ${pct(base.avg)}`, "featured"),
-    npaKpi(),
-    kpi("Deposits paying above market avg", `${depWins}<small>/${deps.length}</small>`, "deposit lines NMB offers, by top rate"),
-    kpi("Lending priced below market avg", `${loanWins}<small>/${loans.length}</small>`, "loan lines NMB offers, by lowest rate"),
-    kpi("Market-leading rates", `${leads.length}`, leads.length ? esc(leadText.slice(0, 3).join(" · ") + (leads.length > 3 ? ` +${leads.length - 3}` : "")) : "None today"),
+    kpi("Base rate", pct(base.nmb), `${ordinal(base.rank)} lowest of ${base.n} banks · market average ${pct(base.avg)}`, "featured"),
+    nplKpi(),
+    kpi("Deposits where we pay more", `${depWins}<small> of ${deps.length}</small>`,
+      `In ${depWins} of our ${deps.length} deposit products, NMB pays more than the average bank`),
+    kpi("Loans where we're cheaper", `${loanWins}<small> of ${loans.length}</small>`,
+      `In ${loanWins} of our ${loans.length} loan products, NMB charges less than the average bank`),
+    kpi("Where NMB is No. 1", `${leads.length}<small> products</small>`, leads.length
+      ? `Best rate of all ${m.banks.length} banks: ${esc(leadText.slice(0, 4).join(", ") + (leads.length > 4 ? ` and ${leads.length - 4} more` : ""))}`
+      : "NMB doesn't have the best rate in any product today"),
   ].join("");
 }
 
@@ -446,7 +470,8 @@ function renderGrid(section) {
     <th class="pin c2 nmb"><img src="assets/nmb-logo-white.png" alt="NMB Bank" class="nmb-logo"><div class="b-base">Base <b>${pct(nmbBase)}</b>${freshTag(NMB)}</div></th>
     <th class="pin c3">Rank<div class="b-base">best in market</div></th>`;
   for (const b of others) {
-    head += `<th><div class="b-name">${bankLabel(b.code)}</div><div class="b-base">Base <b>${pct(m.base[b.code])}</b>${freshTag(b.code)} ${arrow(m.base[b.code] - nmbBase, true)}</div></th>`;
+    const name = section === "loan" ? `<div class="b-name scrip" title="${bankLabel(b.code)}">${esc(SCRIP[b.code] || m.nameOf[b.code])}</div>` : `<div class="b-name">${bankLabel(b.code)}</div>`;
+    head += `<th class="${section === "loan" ? "narrow" : ""}">${name}<div class="b-base">Base <b>${pct(m.base[b.code])}</b>${freshTag(b.code)}</div>${baseVsNmb(m.base[b.code], nmbBase)}</th>`;
   }
   head += `</tr></thead>`;
 
@@ -499,7 +524,7 @@ function bankMetrics() {
   const count = (section) => (code) => state.rows.filter((r) => r.section === section && r.cells[code]).length;
   return [
     { key: "base", label: "Base rate", note: "lower is better", lower: true, get: (c) => m.base[c] ?? null, tag: freshTag },
-    { key: "npa", label: "NPA ratio", note: "non-performing loans", lower: true, get: (c) => m.npa[c] ?? null },
+    { key: "npa", label: "NPL ratio", note: "bad loans, % of total", lower: true, get: (c) => m.npa[c] ?? null },
     { key: "fd1", label: "Fixed deposit 1 yr", note: "rate", lower: false, get: fd1 },
     { key: "fdtop", label: "Best fixed deposit", note: "any tenure", lower: false, get: (c) => { const v = fdRows.map((r) => r.cells[c]?.value).filter((x) => x !== undefined); return v.length ? Math.max(...v) : null; } },
     { key: "sav", label: "Savings top rate", note: "saving account", lower: false, get: sav },
@@ -664,11 +689,11 @@ function addOverviewSheet(wb) {
   const offered = (sec) => state.rows.filter((r) => r.section === sec && r.s.nmb !== null);
   const deps = offered("deposit"), loans = offered("loan");
   const kpis = [
-    ["Base rate", asPct(base.nmb), PCT, `Rank ${base.rank} of ${base.n} (lowest first) · market average ${pct(base.avg)}`],
-    ["NPA ratio", asPct(npa?.nmb), PCT, npa ? `Rank ${npa.rank} of ${npa.n} (lowest first) · market average ${pct(npa.avg)}` : ""],
-    ["Deposit lines paying above market average", `${deps.filter((r) => r.s.nmb >= r.s.avg - 0.005).length} of ${deps.length}`, null, "by each bank's highest rate"],
-    ["Lending lines priced below market average", `${loans.filter((r) => r.s.nmb <= r.s.avg + 0.005).length} of ${loans.length}`, null, "by each bank's lowest rate"],
-    ["Market-leading rates", state.rows.filter((r) => r.s.rank === 1).length, null, state.rows.filter((r) => r.s.rank === 1).map(rowLabel).join(", ")],
+    ["Base rate", asPct(base.nmb), PCT, `${ordinal(base.rank)} lowest of ${base.n} banks · market average ${pct(base.avg)}`],
+    ["NPL ratio (bad loans)", asPct(npa?.nmb), PCT, npa ? `${ordinal(npa.rank)} lowest of ${npa.n} banks · market average ${pct(npa.avg)}` : ""],
+    ["Deposits where we pay more", `${deps.filter((r) => r.s.nmb >= r.s.avg - 0.005).length} of ${deps.length}`, null, "deposit products where NMB pays more than the average bank"],
+    ["Loans where we're cheaper", `${loans.filter((r) => r.s.nmb <= r.s.avg + 0.005).length} of ${loans.length}`, null, "loan products where NMB charges less than the average bank"],
+    ["Where NMB is No. 1", state.rows.filter((r) => r.s.rank === 1).length, null, "best rate of all banks: " + state.rows.filter((r) => r.s.rank === 1).map(rowLabel).join(", ")],
   ];
   kpis.forEach(([label, value, fmt, note], i) => {
     const r = ws.getRow(4 + i);
@@ -774,7 +799,7 @@ function addBanksSheet(wb) {
   const cols = ["Bank", ...metrics.flatMap((mt) => [`${mt.label} (${mt.note})`, `${mt.label} vs NMB`]), "New base rate this period", "Deposit lines", "Loan lines"];
   sheetTitle(ws, "Bank profiles", cols.length);
   ws.mergeCells(3, 1, 3, cols.length);
-  ws.getCell(3, 1).value = "'vs NMB' columns: ▲ green = NMB ahead of that bank, ▼ red = NMB behind (percentage points). NPA = non-performing loans as a share of total loans.";
+  ws.getCell(3, 1).value = "'vs NMB' columns: ▲ green = NMB ahead of that bank, ▼ red = NMB behind (percentage points). NPL = non-performing (bad) loans as a share of total loans.";
   ws.getCell(3, 1).font = { size: 9, italic: true, color: { argb: XL.muted } };
   const H = 5;
   headerRow(ws, H, cols, { height: 44 });
@@ -847,7 +872,7 @@ function addNotesSheet(wb) {
   const ws = wb.addWorksheet("Notes", { properties: { tabColor: { argb: XL.muted } } });
   sheetTitle(ws, "How to read this workbook", 2);
   const notes = [
-    ["Sheets", "Overview: headline figures and NMB's rank, market best/average/worst for every product.\nDeposits / Lending: every bank's rate per product, NMB first, base rates above the header.\nBanks: base rate, NPA and key rates per bank.\nAll rates: one row per bank and product, with ranges and premiums, for filtering and pivot tables."],
+    ["Sheets", "Overview: headline figures and NMB's rank, market best/average/worst for every product.\nDeposits / Lending: every bank's rate per product, NMB first, base rates above the header.\nBanks: base rate, NPL and key rates per bank.\nAll rates: one row per bank and product, with ranges and premiums, for filtering and pivot tables."],
     ["Compared rate", "Loans: each bank's lowest rate for the product (1 = cheapest). Deposits: each bank's highest rate (1 = pays most)."],
     ["Vs NMB / NMB vs average", "▲ green = NMB ahead (cheaper loan or higher deposit rate), ▼ red = NMB behind, in percentage points. = means level."],
     ["Fixed vs variable", "Loan products with \"Fixed\" in the name are fixed rate; all others variable. Special offer rates are used where listed."],
@@ -940,7 +965,7 @@ $("refresh").addEventListener("click", load);
 window.addEventListener("resize", fitGrids);
 
 state.order = "az";
-state.show = { loan: "range", deposit: "range" };
+state.show = { loan: "premium", deposit: "range" };
 const initial = location.hash.slice(1);
 if (["summary", "loan", "deposit", "banks"].includes(initial)) showTab(initial);
 load();

@@ -145,6 +145,9 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .b-name { font-weight: 600; font-size: .84rem; color: var(--ink); line-height: 1.25; white-space: normal; }
 .b-base { margin-top: 6px; font-size: .74rem; color: var(--muted); white-space: nowrap; font-weight: 500; }
 .b-base b { color: var(--text); font-weight: 600; }
+.b-vs { margin-top: 2px; font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.b-name.scrip { font-family: var(--title); font-size: .95rem; font-weight: 800; letter-spacing: .02em; cursor: help; }
+.grid thead th.narrow { min-width: 104px; }
 .grid thead .c1, .grid thead .c3 { font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
 .grid thead .c3 .b-base { text-transform: none; letter-spacing: 0; color: var(--faint); }
 
