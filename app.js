@@ -6,7 +6,7 @@ const API = "https://admin.bankbyaj.com/api/v1/";
 const NMB = "NMB Bank";             // institute_code used by BankByaj
 const AUTO_REFRESH_MS = 15 * 60 * 1000;
 
-const state = { data: null, source: null, tab: "summary", csv: {} };
+const state = { data: null, source: null, tab: "summary" };
 const $ = (id) => document.getElementById(id);
 
 // ---------- loading ----------
@@ -408,12 +408,6 @@ function renderScorecard(section) {
   $(`${section}-missing`).innerHTML = missing.length
     ? `<b>Not offered by NMB (${missing.length}):</b> ${missing.map((r) => esc(rowLabel(r))).join(", ")}` : "";
 
-  const csv = [["Segment", "Product", "Variant", "NMB", "NMB rank", "Banks", "Market best", "Market average", "Market worst", "NMB minus average (pp)"]];
-  for (const r of rows) {
-    const s = r.s, best = r.lowerIsBetter ? s.min : s.max, worst = r.lowerIsBetter ? s.max : s.min;
-    csv.push([r.segment, r.product, r.variant || "", s.nmb?.toFixed(2) ?? "Not offered", s.rank ?? "", s.n, best.toFixed(2), s.avg.toFixed(2), worst.toFixed(2), s.nmb === null ? "" : (s.nmb - s.avg).toFixed(2)]);
-  }
-  state.csv[section + "-score"] = csv;
 }
 
 function orderedBanks() {
@@ -489,16 +483,6 @@ function renderGrid(section) {
   }
   $(`${section}-table`).innerHTML = head + `<tbody>${body}</tbody>`;
   $(`${section}-jump`).innerHTML = segments.map(([name, id]) => `<button type="button" data-jump="${id}">${esc(name)}</button>`).join("");
-
-  const csv = [[mode === "premium" ? "Premium over base rate (pp)" : "Rate (%)"], ["Segment", "Product", "Variant", "NMB rank", "Market best", ...cols.map((b) => b.name), ...others.map((b) => `${b.name} minus NMB (pp)`)]];
-  csv.push(["", "Base rate", "", "", "", ...cols.map((b) => m.base[b.code]?.toFixed(2) ?? ""), ...others.map((b) => m.base[b.code] !== undefined ? (m.base[b.code] - nmbBase).toFixed(2) : "")]);
-  for (const r of rows) {
-    const nmb = r.cells[NMB];
-    const fmt = (c) => (c ? (c.range.lo === c.range.hi ? c.range.lo.toFixed(2) : `${c.range.lo.toFixed(2)} - ${c.range.hi.toFixed(2)}`) : "");
-    csv.push([r.segment, r.product, r.variant || "", r.s.rank ? `${r.s.rank}/${r.s.n}` : "", (r.lowerIsBetter ? r.s.min : r.s.max).toFixed(2),
-      ...cols.map((b) => fmt(r.cells[b.code])), ...others.map((b) => (r.cells[b.code] && nmb ? (r.cells[b.code].value - nmb.value).toFixed(2) : ""))]);
-  }
-  state.csv[section] = csv;
 }
 
 // Bank profiles: one row per bank, key metrics as columns. NMB first, then the
@@ -569,9 +553,6 @@ function renderBanks() {
   const avg = metrics.map((mt) => (stats[mt.key] ? `<td class="num">${fmt(mt, stats[mt.key].avg)}</td>` : `<td></td>`)).join("");
   body += `<tr class="avg-row"><td class="bank">Market average</td>${avg}</tr>`;
   $("banks-table").innerHTML = head + `<tbody>${body}</tbody>`;
-
-  state.csv.banks = [["Bank", ...metrics.map((mt) => `${mt.label} (${mt.note})`)],
-    ...list.map((b) => [m.nameOf[b.code], ...metrics.map((mt) => { const v = mt.get(b.code); return v === null ? "" : mt.show ? mt.show(b.code) : mt.count ? v : v.toFixed(2); })])];
 }
 
 // Grids fill the window from their top edge down.
@@ -584,20 +565,340 @@ function fitGrids() {
   });
 }
 
-// ---------- CSV ----------
+// ---------- Excel export ----------
 
-function downloadCsv(names) {
-  const rows = names.split(",").flatMap((n, i) => (i ? [[], ...(state.csv[n] || [])] : state.csv[n] || []));
-  if (!rows.length) return;
-  const text = rows.map((r) => r.map((v) => {
-    const s = String(v ?? "");
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  }).join(",")).join("\n");
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv" }));
-  a.download = `nmb-rate-comparison-${names.split(",")[0].replace("-score", "-overview")}-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+// Builds a formatted .xlsx in the browser with ExcelJS (bundled in assets/vendor,
+// loaded on first download). Rates are stored as real percentages and gaps as
+// numbers, so filters, sorting and pivots work. Gap format: ▲ green = NMB ahead,
+// ▼ red = NMB behind, matching the website.
+const XL = {
+  teal: "FF008EB0", tealInk: "FF00728E", tint: "FFE8F5F9", ink: "FF1E242A", muted: "FF64748B",
+  good: "FF15803D", goodBg: "FFE7F6EC", bad: "FFC81E1E", badBg: "FFFDECEC", band: "FFF8FAFC",
+  hair: "FFE2E8F0", gold: "FFA16207", white: "FFFFFFFF",
+};
+const PCT = "0.00%";
+const PP = '+0.00" pp";-0.00" pp";0.00" pp"';
+const GAP = '"▲ "0.00;"▼ "0.00;"="';
+const SHEET_FOR_TAB = { summary: "Overview", deposit: "Deposits", loan: "Lending", banks: "Banks" };
+
+let excelLib = null;
+function loadExcelJS() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  return (excelLib ||= new Promise((resolve, reject) => {
+    const sc = document.createElement("script");
+    sc.src = "assets/vendor/exceljs-4.4.0.min.js";
+    sc.onload = () => resolve(window.ExcelJS);
+    sc.onerror = () => { excelLib = null; reject(new Error("Could not load the Excel library")); };
+    document.head.appendChild(sc);
+  }));
+}
+
+const fill = (argb) => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
+// Gap cells get explicit green/red fonts (number-format colours render differently across apps).
+function gapCell(cell, v) {
+  cell.value = v;
+  cell.numFmt = GAP;
+  if (v === null || v === undefined) return;
+  cell.font = { bold: true, size: 10, color: { argb: v > 0.005 ? XL.good : v < -0.005 ? XL.bad : XL.muted } };
+}
+const hairBorder = { bottom: { style: "thin", color: { argb: XL.hair } } };
+const asPct = (v) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(v * 100) / 10000);
+const asNum = (v) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(v * 100) / 100);
+// Positive = NMB ahead. diff = other − NMB, as in arrow().
+const advantage = (diff, lowerIsBetter) => (diff === null || !Number.isFinite(diff) ? null : asNum(lowerIsBetter ? diff : -diff));
+
+function sheetTitle(ws, title, lastCol) {
+  const m = state.model;
+  ws.mergeCells(1, 1, 1, lastCol);
+  ws.getCell(1, 1).value = title;
+  ws.getCell(1, 1).font = { name: "Calibri", size: 16, bold: true, color: { argb: XL.ink } };
+  ws.getRow(1).height = 26;
+  ws.mergeCells(2, 1, 2, lastCol);
+  const src = state.source === "live" ? "Live data" : "Backup copy";
+  ws.getCell(2, 1).value = `NMB Bank vs ${m.banks.length} commercial banks · ${src} as of ${fmtDate(state.data.fetched_at)}${m.modified ? ` · rates last updated ${fmtDate(m.modified)}` : ""}`;
+  ws.getCell(2, 1).font = { size: 10, color: { argb: XL.muted } };
+}
+
+function headerRow(ws, rowNo, labels, opts = {}) {
+  const row = ws.getRow(rowNo);
+  labels.forEach((label, i) => {
+    const c = row.getCell(i + 1);
+    c.value = label;
+    const nmb = opts.nmbCol && i + 1 === opts.nmbCol;
+    c.fill = fill(nmb ? XL.tealInk : XL.teal);
+    c.font = { bold: true, color: { argb: XL.white }, size: 10 };
+    c.alignment = { vertical: "middle", horizontal: i < (opts.textCols ?? 1) ? "left" : "center", wrapText: true };
+    c.border = { bottom: { style: "medium", color: { argb: XL.tealInk } } };
+  });
+  row.height = opts.height || 32;
+}
+
+function styleBody(ws, fromRow, toRow, ncol, opts = {}) {
+  for (let r = fromRow; r <= toRow; r++) {
+    const row = ws.getRow(r);
+    for (let c = 1; c <= ncol; c++) {
+      const cell = row.getCell(c);
+      cell.border = hairBorder;
+      cell.font = { size: 10, color: { argb: XL.ink }, ...(cell.font || {}) };
+      if (!cell.alignment) cell.alignment = { vertical: "middle", horizontal: c <= (opts.textCols ?? 1) ? "left" : "center" };
+      if (!cell.fill && opts.band && (r - fromRow) % 2 === 1) cell.fill = fill(XL.band);
+    }
+  }
+}
+
+function finishSheet(ws, { headerRowNo, lastRow, ncol, xSplit = 1, widths }) {
+  ws.views = [{ state: "frozen", xSplit, ySplit: headerRowNo, showGridLines: false, zoomScale: 100 }];
+  if (lastRow > headerRowNo) ws.autoFilter = { from: { row: headerRowNo, column: 1 }, to: { row: lastRow, column: ncol } };
+  if (widths) widths.forEach((w, i) => (ws.getColumn(i + 1).width = w));
+  ws.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: 9, printTitlesRow: `${headerRowNo}:${headerRowNo}` };
+}
+
+function addOverviewSheet(wb) {
+  const m = state.model;
+  const ws = wb.addWorksheet("Overview", { properties: { tabColor: { argb: XL.teal } } });
+  const cols = ["Section", "Segment", "Product", "Variant", "NMB rate", "NMB rank", "Banks", "Market best", "Best bank(s)", "Market average", "Market worst", "NMB vs average"];
+  sheetTitle(ws, "Market position — scorecard", cols.length);
+
+  // Headline figures
+  const base = standing({ ...m.base }, true), npa = standing({ ...m.npa }, true);
+  const offered = (sec) => state.rows.filter((r) => r.section === sec && r.s.nmb !== null);
+  const deps = offered("deposit"), loans = offered("loan");
+  const kpis = [
+    ["Base rate", asPct(base.nmb), PCT, `Rank ${base.rank} of ${base.n} (lowest first) · market average ${pct(base.avg)}`],
+    ["NPA ratio", asPct(npa?.nmb), PCT, npa ? `Rank ${npa.rank} of ${npa.n} (lowest first) · market average ${pct(npa.avg)}` : ""],
+    ["Deposit lines paying above market average", `${deps.filter((r) => r.s.nmb >= r.s.avg - 0.005).length} of ${deps.length}`, null, "by each bank's highest rate"],
+    ["Lending lines priced below market average", `${loans.filter((r) => r.s.nmb <= r.s.avg + 0.005).length} of ${loans.length}`, null, "by each bank's lowest rate"],
+    ["Market-leading rates", state.rows.filter((r) => r.s.rank === 1).length, null, state.rows.filter((r) => r.s.rank === 1).map(rowLabel).join(", ")],
+  ];
+  kpis.forEach(([label, value, fmt, note], i) => {
+    const r = ws.getRow(4 + i);
+    r.getCell(1).value = label; r.getCell(1).font = { bold: true, size: 10, color: { argb: XL.ink } };
+    ws.mergeCells(4 + i, 1, 4 + i, 2);
+    r.getCell(3).value = value; r.getCell(3).font = { bold: true, size: 12, color: { argb: XL.tealInk } };
+    r.getCell(3).alignment = { horizontal: "left" };
+    if (fmt) r.getCell(3).numFmt = fmt;
+    ws.mergeCells(4 + i, 4, 4 + i, cols.length);
+    r.getCell(4).value = note; r.getCell(4).font = { size: 10, color: { argb: XL.muted } };
+  });
+
+  const H = 4 + kpis.length + 1;
+  headerRow(ws, H, cols, { textCols: 4 });
+  let r = H + 1;
+  const line = (section, segment, product, variant, s, lowerIsBetter, nmbText) => {
+    const best = lowerIsBetter ? s.min : s.max, worst = lowerIsBetter ? s.max : s.min;
+    const bestBanks = (lowerIsBetter ? s.minBanks : s.maxBanks).map((c) => m.nameOf[c]).join(", ");
+    const row = ws.getRow(r++);
+    row.values = [section, segment, product, variant || "", nmbText ?? "Not offered", s.rank ?? "", s.n, asPct(best), bestBanks, asPct(s.avg), asPct(worst)];
+    [8, 10, 11].forEach((c) => (row.getCell(c).numFmt = PCT));
+    gapCell(row.getCell(12), s.nmb === null ? null : advantage(s.avg - s.nmb, lowerIsBetter));
+    row.getCell(9).alignment = { horizontal: "left", vertical: "middle" };
+    row.getCell(5).font = { bold: true, color: { argb: s.nmb === null ? XL.muted : XL.tealInk }, size: 10 };
+  };
+  line("Lending", "Funding", "Base rate", "", base, true, pct(base.nmb));
+  for (const sec of ["deposit", "loan"]) {
+    for (const row of state.rows.filter((x) => x.section === sec)) {
+      const c = row.cells[NMB];
+      const txt = c ? (c.range.lo === c.range.hi ? pct(c.range.lo) : `${pct(c.range.lo)} – ${pct(c.range.hi)}`) : null;
+      line(sec === "deposit" ? "Deposits" : "Lending", row.segment, row.product, row.variant, row.s, row.lowerIsBetter, txt);
+    }
+  }
+  styleBody(ws, H + 1, r - 1, cols.length, { textCols: 4, band: true });
+  finishSheet(ws, { headerRowNo: H, lastRow: r - 1, ncol: cols.length, xSplit: 3, widths: [11, 26, 22, 10, 16, 10, 8, 12, 46, 13, 12, 14] });
+}
+
+function addGridSheet(wb, section) {
+  const m = state.model;
+  const isLoan = section === "loan";
+  const ws = wb.addWorksheet(isLoan ? "Lending" : "Deposits", { properties: { tabColor: { argb: isLoan ? XL.ink : XL.teal } } });
+  const banks = orderedBanks();
+  const lead = isLoan ? ["Segment", "Product", "Variant"] : ["Segment", "Product"];
+  const fixedCols = [...lead, "NMB rank", "Banks", "Market best", "Market average"];
+  const cols = [...fixedCols, ...banks.map((b) => (b.code === NMB ? "NMB Bank" : b.name))];
+  const nmbCol = fixedCols.length + 1;
+  sheetTitle(ws, isLoan ? "Lending rates — each bank's lowest rate per product" : "Deposit rates — each bank's highest rate per product", cols.length);
+
+  // Legend + base rates sit above the filter header, frozen in view.
+  ws.mergeCells(3, 1, 3, cols.length);
+  ws.getCell(3, 1).value = isLoan ? "Green cell = NMB cheaper than that bank · Red = that bank cheaper · Bold gold = best in market · ranges per product on the 'All rates' sheet"
+    : "Green cell = NMB pays more than that bank · Red = that bank pays more · Bold gold = best in market · ranges per product on the 'All rates' sheet";
+  ws.getCell(3, 1).font = { size: 9, italic: true, color: { argb: XL.muted } };
+  const baseRow = ws.getRow(4);
+  baseRow.getCell(fixedCols.length).value = "Base rate";
+  baseRow.getCell(fixedCols.length).font = { bold: true, size: 10, color: { argb: XL.ink } };
+  baseRow.getCell(fixedCols.length).alignment = { horizontal: "right" };
+  banks.forEach((b, i) => {
+    const c = baseRow.getCell(nmbCol + i);
+    c.value = asPct(m.base[b.code]); c.numFmt = PCT;
+    c.font = { bold: true, size: 10, color: { argb: b.code === NMB ? XL.white : XL.ink } };
+    c.fill = fill(b.code === NMB ? XL.teal : XL.tint);
+    c.alignment = { horizontal: "center" };
+  });
+
+  const H = 5;
+  headerRow(ws, H, cols, { textCols: lead.length, nmbCol, height: 44 });
+  let r = H + 1;
+  for (const row of state.rows.filter((x) => x.section === section)) {
+    const s = row.s, best = row.lowerIsBetter ? s.min : s.max, nmb = row.cells[NMB];
+    const x = ws.getRow(r++);
+    x.values = [...(isLoan ? [row.segment, row.product, row.variant] : [row.segment, row.product]),
+      s.rank ? s.rank : "—", s.n, asPct(best), asPct(s.avg), ...banks.map((b) => asPct(row.cells[b.code]?.value))];
+    for (let c = lead.length + 3; c <= cols.length; c++) x.getCell(c).numFmt = PCT;
+    banks.forEach((b, i) => {
+      const cell = x.getCell(nmbCol + i), c = row.cells[b.code];
+      if (!c) return;
+      const isBest = Math.abs(c.value - best) < 0.005;
+      if (b.code === NMB) {
+        cell.fill = fill(XL.tint);
+        cell.font = { bold: true, size: 10, color: { argb: isBest ? XL.gold : XL.tealInk } };
+        return;
+      }
+      if (nmb) {
+        const adv = advantage(c.value - nmb.value, row.lowerIsBetter);
+        if (adv > 0.005) cell.fill = fill(XL.goodBg);
+        else if (adv < -0.005) cell.fill = fill(XL.badBg);
+      }
+      if (isBest) cell.font = { bold: true, size: 10, color: { argb: XL.gold } };
+    });
+    if (!nmb) { x.getCell(nmbCol).value = "Not offered"; x.getCell(nmbCol).fill = fill(XL.tint); x.getCell(nmbCol).font = { italic: true, size: 9, color: { argb: XL.muted } }; }
+  }
+  styleBody(ws, H + 1, r - 1, cols.length, { textCols: lead.length });
+  finishSheet(ws, { headerRowNo: H, lastRow: r - 1, ncol: cols.length, xSplit: nmbCol,
+    widths: [...(isLoan ? [24, 20, 10] : [26, 20]), 9, 7, 11, 11, 13, ...banks.slice(1).map(() => 13)] });
+}
+
+function addBanksSheet(wb) {
+  const m = state.model;
+  const ws = wb.addWorksheet("Banks", { properties: { tabColor: { argb: XL.teal } } });
+  const metrics = bankMetrics().filter((mt) => !mt.count);
+  const count = (sec, code) => state.rows.filter((r) => r.section === sec && r.cells[code]).length;
+  const cols = ["Bank", ...metrics.flatMap((mt) => [`${mt.label} (${mt.note})`, `${mt.label} vs NMB`]), "New base rate this period", "Deposit lines", "Loan lines"];
+  sheetTitle(ws, "Bank profiles", cols.length);
+  ws.mergeCells(3, 1, 3, cols.length);
+  ws.getCell(3, 1).value = "'vs NMB' columns: ▲ green = NMB ahead of that bank, ▼ red = NMB behind (percentage points). NPA = non-performing loans as a share of total loans.";
+  ws.getCell(3, 1).font = { size: 9, italic: true, color: { argb: XL.muted } };
+  const H = 5;
+  headerRow(ws, H, cols, { height: 44 });
+  const list = [m.banks.find((b) => b.code === NMB), ...m.banks.filter((b) => b.code !== NMB).sort((a, b) => a.name.localeCompare(b.name))];
+  let r = H + 1;
+  for (const b of list) {
+    const me = b.code === NMB;
+    const x = ws.getRow(r++);
+    x.values = [b.name, ...metrics.flatMap((mt) => {
+      const v = mt.get(b.code), nv = mt.get(NMB);
+      return [mt.unit === "pp" ? asNum(v) : asPct(v), null];
+    }), m.baseOld[b.code] === false ? "Yes" : "No", count("deposit", b.code), count("loan", b.code)];
+    metrics.forEach((mt, i) => {
+      x.getCell(2 + i * 2).numFmt = mt.unit === "pp" ? PP : PCT;
+      const v = mt.get(b.code), nv = mt.get(NMB);
+      gapCell(x.getCell(3 + i * 2), me || v === null || nv === null ? null : advantage(v - nv, mt.lower));
+    });
+    if (me) for (let c = 1; c <= cols.length; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.tealInk } }; }
+  }
+  styleBody(ws, H + 1, r - 1, cols.length, { band: true });
+  // Market average below the filtered range
+  const avgRow = ws.getRow(r + 1);
+  avgRow.getCell(1).value = "Market average";
+  metrics.forEach((mt, i) => {
+    const s = standing(Object.fromEntries(m.banks.map((b) => [b.code, mt.get(b.code)])), mt.lower);
+    const c = avgRow.getCell(2 + i * 2);
+    c.value = s ? (mt.unit === "pp" ? asNum(s.avg) : asPct(s.avg)) : null;
+    c.numFmt = mt.unit === "pp" ? PP : PCT;
+  });
+  for (let c = 1; c <= cols.length; c++) { avgRow.getCell(c).font = { bold: true, size: 10, color: { argb: XL.muted } }; avgRow.getCell(c).border = { top: { style: "thin", color: { argb: XL.muted } } }; avgRow.getCell(c).alignment = { horizontal: c === 1 ? "left" : "center" }; }
+  finishSheet(ws, { headerRowNo: H, lastRow: r - 1, ncol: cols.length, xSplit: 1, widths: [28, ...metrics.flatMap(() => [13, 11]), 12, 10, 10] });
+}
+
+function addDetailSheet(wb) {
+  const m = state.model;
+  const ws = wb.addWorksheet("All rates", { properties: { tabColor: { argb: XL.muted } } });
+  const cols = ["Section", "Segment", "Product", "Variant", "Bank", "Rate from", "Rate to", "Compared rate", "Premium over base", "NMB compared rate", "Vs NMB", "Bank rank", "Banks", "Best in market", "Product names"];
+  sheetTitle(ws, "All rates — one row per bank and product (use the filters or a pivot table)", cols.length);
+  const H = 4;
+  headerRow(ws, H, cols, { textCols: 5 });
+  let r = H + 1;
+  for (const row of state.rows) {
+    const vals = Object.values(row.cells).map((c) => c.value);
+    const best = row.lowerIsBetter ? Math.min(...vals) : Math.max(...vals);
+    const nmb = row.cells[NMB];
+    const ordered = Object.values(row.cells).sort((a, b) => (row.lowerIsBetter ? a.value - b.value : b.value - a.value));
+    for (const c of ordered) {
+      const me = c.code === NMB;
+      const rank = 1 + vals.filter((v) => (row.lowerIsBetter ? v < c.value : v > c.value)).length;
+      const b = m.base[c.code];
+      const x = ws.getRow(r++);
+      x.values = [row.section === "loan" ? "Lending" : "Deposits", row.segment, row.product, row.variant || "", m.nameOf[c.code],
+        asPct(c.range.lo), asPct(c.range.hi), asPct(c.value),
+        row.section === "loan" && b !== undefined ? asNum(c.value - b) : null,
+        asPct(nmb?.value), null,
+        rank, vals.length, Math.abs(c.value - best) < 0.005 ? "Yes" : "",
+        c.products.map((p) => p.name).join("; ")];
+      [6, 7, 8, 10].forEach((k) => (x.getCell(k).numFmt = PCT));
+      x.getCell(9).numFmt = PP;
+      gapCell(x.getCell(11), me || !nmb ? null : advantage(c.value - nmb.value, row.lowerIsBetter));
+      if (me) for (let k = 1; k <= cols.length; k++) { x.getCell(k).fill = fill(XL.tint); x.getCell(k).font = { bold: true, size: 10, color: { argb: XL.tealInk } }; }
+    }
+  }
+  styleBody(ws, H + 1, r - 1, cols.length, { textCols: 5 });
+  for (let k = H + 1; k < r; k++) ws.getRow(k).getCell(15).alignment = { horizontal: "left", vertical: "middle" };
+  finishSheet(ws, { headerRowNo: H, lastRow: r - 1, ncol: cols.length, xSplit: 5, widths: [10, 26, 20, 10, 28, 10, 10, 11, 11, 12, 11, 9, 8, 10, 60] });
+}
+
+function addNotesSheet(wb) {
+  const ws = wb.addWorksheet("Notes", { properties: { tabColor: { argb: XL.muted } } });
+  sheetTitle(ws, "How to read this workbook", 2);
+  const notes = [
+    ["Sheets", "Overview: headline figures and NMB's rank, market best/average/worst for every product.\nDeposits / Lending: every bank's rate per product, NMB first, base rates above the header.\nBanks: base rate, NPA and key rates per bank.\nAll rates: one row per bank and product, with ranges and premiums, for filtering and pivot tables."],
+    ["Compared rate", "Loans: each bank's lowest rate for the product (1 = cheapest). Deposits: each bank's highest rate (1 = pays most)."],
+    ["Vs NMB / NMB vs average", "▲ green = NMB ahead (cheaper loan or higher deposit rate), ▼ red = NMB behind, in percentage points. = means level."],
+    ["Fixed vs variable", "Loan products with \"Fixed\" in the name are fixed rate; all others variable. Special offer rates are used where listed."],
+    ["Fixed deposit tenures", "Read from each product name (e.g. 3Mto<6M, >1Yto2Y, 5Y&above); where a bank's bands overlap at a boundary, the higher rate is used."],
+    ["Premium over base", "Loan rate minus that bank's base rate."],
+    ["New base rate this period", "Banks that have published this period's base rate; others still show last period's figure."],
+    ["Commercial banks", "Class A institutions."],
+    ["Filters", "Every table has filter buttons on its header row. Panes are frozen so headers and NMB stay in view."],
+  ];
+  notes.forEach(([k, v], i) => {
+    const row = ws.getRow(4 + i);
+    row.getCell(1).value = k; row.getCell(1).font = { bold: true, size: 10, color: { argb: XL.tealInk } };
+    row.getCell(2).value = v; row.getCell(2).font = { size: 10, color: { argb: XL.ink } };
+    row.getCell(1).alignment = { vertical: "top" }; row.getCell(2).alignment = { vertical: "top", wrapText: true };
+    row.getCell(1).border = hairBorder; row.getCell(2).border = hairBorder;
+  });
+  ws.getColumn(1).width = 26; ws.getColumn(2).width = 110;
+  ws.views = [{ showGridLines: false }];
+}
+
+async function downloadExcel(btn) {
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Preparing…";
+  try {
+    const ExcelJS = await loadExcelJS();
+    const wb = new ExcelJS.Workbook();
+    wb.creator = "NMB Bank Rate Comparison";
+    wb.created = new Date();
+    addOverviewSheet(wb);
+    addGridSheet(wb, "deposit");
+    addGridSheet(wb, "loan");
+    addBanksSheet(wb);
+    addDetailSheet(wb);
+    addNotesSheet(wb);
+    const active = wb.worksheets.findIndex((w) => w.name === SHEET_FOR_TAB[state.tab]);
+    wb.views = [{ activeTab: Math.max(0, active), firstSheet: 0 }];
+    const buf = await wb.xlsx.writeBuffer();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    a.download = `NMB-Rate-Comparison-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  } catch (err) {
+    alert("Sorry, the Excel file could not be created: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
 }
 
 // ---------- events ----------
@@ -618,7 +919,7 @@ document.addEventListener("click", (e) => {
   const t = e.target.closest("button, a[data-tab]");
   if (!t) return;
   if (t.dataset.tab) { e.preventDefault(); return showTab(t.dataset.tab); }
-  if (t.dataset.csv) return downloadCsv(t.dataset.csv);
+  if (t.dataset.xlsx !== undefined) return downloadExcel(t);
   if (t.dataset.order) { state.order = t.dataset.order; setToggle("order", state.order); renderGrid("loan"); renderGrid("deposit"); return; }
   if (t.dataset.show) {
     const section = t.closest(".panel").id.replace("tab-", "");
