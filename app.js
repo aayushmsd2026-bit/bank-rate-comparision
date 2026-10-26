@@ -380,6 +380,8 @@ function renderKpis() {
   $("kpis").innerHTML = [
     kpi("Base rate", pct(base.nmb), `${ordinal(base.rank)} lowest of ${base.n} banks · market average ${pct(base.avg)}`, "featured"),
     nplKpi(),
+  ].join("");
+  $("kpis-summary").innerHTML = [
     kpi("Deposits where we pay more", `${depWins}<small> of ${deps.length}</small>`,
       `In ${depWins} of our ${deps.length} deposit products, NMB pays more than the average bank`),
     kpi("Loans where we're cheaper", `${loanWins}<small> of ${loans.length}</small>`,
@@ -1061,9 +1063,9 @@ async function downloadExcel(btn) {
     wb.creator = "NMB Bank Rate Comparison";
     wb.created = new Date();
     addOverviewSheet(wb);
+    addBaseSheet(wb);
     addGridSheet(wb, "deposit");
     addGridSheet(wb, "loan");
-    addBaseSheet(wb);
     addBanksSheet(wb);
     addDetailSheet(wb);
     addNotesSheet(wb);

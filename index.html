@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202610260726">
+  <link rel="stylesheet" href="style.css?v=202610260733">
 </head>
 <body>
   <header class="nav">
@@ -21,9 +21,9 @@
       </a>
       <nav class="tabs" role="tablist" aria-label="Sections">
         <button role="tab" data-tab="summary" aria-selected="true">Overview</button>
+        <button role="tab" data-tab="base" aria-selected="false">Base rate</button>
         <button role="tab" data-tab="deposit" aria-selected="false">Deposits</button>
         <button role="tab" data-tab="loan" aria-selected="false">Lending</button>
-        <button role="tab" data-tab="base" aria-selected="false">Base rate</button>
         <button role="tab" data-tab="banks" aria-selected="false">Banks</button>
       </nav>
       <div class="nav-status">
@@ -47,7 +47,7 @@
       </div>
 
       <p id="updates" class="updates" hidden></p>
-      <div id="kpis" class="kpis"></div>
+      <div id="kpis" class="kpis kpis-2"></div>
 
       <div class="cards2">
         <article class="card">
@@ -75,6 +75,38 @@
         <span><b class="chg bad">▼</b> NMB behind market average</span>
         <span>gaps in percentage points</span>
       </p>
+      <div class="section-title">
+        <h2>In summary</h2>
+        <p>How NMB's rates compare with the average bank, across the products we offer</p>
+      </div>
+      <div id="kpis-summary" class="kpis kpis-3"></div>
+    </section>
+
+    <!-- Base rate -->
+    <section id="tab-base" class="panel" hidden>
+      <div class="head">
+        <div>
+          <h1>Base rate analysis</h1>
+          <p class="sub">Where NMB's base rate sits among the commercial banks · <span class="stamp"></span></p>
+        </div>
+        <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
+      </div>
+      <div id="base-kpis" class="kpis"></div>
+      <article class="card">
+        <header class="card-head">
+          <h2>Ranking</h2>
+          <p>Lowest to highest · the line marks the market average · <span class="fresh">new</span> = published this period</p>
+        </header>
+        <div id="base-bars" class="bars"></div>
+      </article>
+      <article class="card mx-card">
+        <header class="card-head">
+          <h2>Base rate matrix</h2>
+          <p>Each cell = <b>row bank's base rate − column bank's base rate</b>, in percentage points. Read along NMB's row to see how far above or below each bank we are; NMB's column shows the reverse.
+            <span class="key-sw low"></span> row bank lower <span class="key-sw high"></span> row bank higher · hover a cell for the full sentence</p>
+        </header>
+        <div class="mx-wrap"><table id="base-matrix" class="mx"></table></div>
+      </article>
     </section>
 
     <!-- Deposits -->
@@ -139,33 +171,6 @@
       </p>
     </section>
 
-    <!-- Base rate -->
-    <section id="tab-base" class="panel" hidden>
-      <div class="head">
-        <div>
-          <h1>Base rate analysis</h1>
-          <p class="sub">Where NMB's base rate sits among the commercial banks · <span class="stamp"></span></p>
-        </div>
-        <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
-      </div>
-      <div id="base-kpis" class="kpis"></div>
-      <article class="card">
-        <header class="card-head">
-          <h2>Ranking</h2>
-          <p>Lowest to highest · the line marks the market average · <span class="fresh">new</span> = published this period</p>
-        </header>
-        <div id="base-bars" class="bars"></div>
-      </article>
-      <article class="card mx-card">
-        <header class="card-head">
-          <h2>Base rate matrix</h2>
-          <p>Each cell = <b>row bank's base rate − column bank's base rate</b>, in percentage points. Read along NMB's row to see how far above or below each bank we are; NMB's column shows the reverse.
-            <span class="key-sw low"></span> row bank lower <span class="key-sw high"></span> row bank higher · hover a cell for the full sentence</p>
-        </header>
-        <div class="mx-wrap"><table id="base-matrix" class="mx"></table></div>
-      </article>
-    </section>
-
     <!-- Banks -->
     <section id="tab-banks" class="panel" hidden>
       <div class="head">
@@ -197,6 +202,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202610260726"></script>
+  <script src="app.js?v=202610260733"></script>
 </body>
 </html>

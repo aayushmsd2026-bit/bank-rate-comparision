@@ -88,6 +88,16 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .kpi.featured .k-label, .kpi.featured .k-note { color: rgba(255,255,255,.85); }
 .kpi.featured .k-value { color: #fff; }
 
+.kpis-2 { grid-template-columns: repeat(2, 1fr); }
+.kpis-2 .kpi { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 28px; align-items: end; }
+.kpis-2 .k-label { grid-column: 1 / -1; }
+.kpis-2 .k-value { margin: 6px 0 0; }
+.kpis-2 .k-note { padding-bottom: 6px; font-size: .9rem; }
+.kpis-3 { grid-template-columns: repeat(3, 1fr); margin-bottom: 4px; }
+.section-title { margin: 28px 0 12px; }
+.section-title h2 { font-size: 1.15rem; font-weight: 700; }
+.section-title p { margin: 2px 0 0; font-size: .82rem; color: var(--muted); }
+
 /* ---------- scorecards ---------- */
 .cards2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 .card { background: var(--surface); border: 1px solid var(--hair-soft); border-radius: var(--radius); padding: 6px 0 4px; overflow: hidden; }
@@ -265,6 +275,7 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .cards2 { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
+  .kpis-2, .kpis-3 { grid-template-columns: 1fr; }
   .bar-row, .bar-axis { grid-template-columns: 20px 1fr 54px; }
   .bar-track, .bar-vs { display: none; }
   .nav { position: static; }
