@@ -473,8 +473,8 @@ function renderGrid(section) {
     <th class="pin c2 nmb"><img src="assets/nmb-logo-white.png" alt="NMB Bank" class="nmb-logo"><div class="b-base">Base <b>${pct(nmbBase)}</b>${freshTag(NMB)}</div></th>
     <th class="pin c3">Rank<div class="b-base">best in market</div></th>`;
   for (const b of others) {
-    const name = section === "loan" ? `<div class="b-name scrip" title="${bankLabel(b.code)}">${esc(SCRIP[b.code] || m.nameOf[b.code])}</div>` : `<div class="b-name">${bankLabel(b.code)}</div>`;
-    head += `<th class="${section === "loan" ? "narrow" : ""}">${name}<div class="b-base">Base <b>${pct(m.base[b.code])}</b>${freshTag(b.code)}</div>${baseVsNmb(m.base[b.code], nmbBase)}</th>`;
+    const name = `<div class="b-name scrip" title="${bankLabel(b.code)}">${esc(SCRIP[b.code] || m.nameOf[b.code])}</div>`;
+    head += `<th class="narrow">${name}<div class="b-base">Base <b>${pct(m.base[b.code])}</b>${freshTag(b.code)}</div>${baseVsNmb(m.base[b.code], nmbBase)}</th>`;
   }
   head += `</tr></thead>`;
 
