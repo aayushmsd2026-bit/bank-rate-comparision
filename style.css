@@ -260,6 +260,27 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .key-sw.high { background: rgba(217,154,6,.55); }
 .banks .b-vs { text-align: right; }
 
+/* ---------- performance ---------- */
+#perf-kpis .kpi .k-value { font-size: 1.9rem; }
+#perf-kpis .k-value small, .perf .val small { font-size: .55em; color: inherit; opacity: .75; font-weight: 600; }
+.k-sub { font-weight: 500; color: var(--faint); }
+.kpi.featured .k-sub { color: rgba(255,255,255,.75); }
+.toggle.wide { flex-wrap: wrap; }
+.perf td.bank { white-space: nowrap; line-height: 1.25; }
+.banks.perf th, .banks.perf td { padding-left: 9px; padding-right: 9px; }
+.perf td.bank .bank-full { display: block; font-size: .74rem; }
+.bank-full { color: var(--muted); font-weight: 500; font-size: .82rem; }
+.nmb-row .bank-full { color: var(--brand-ink); }
+.flag { color: #B45309; margin-left: 4px; cursor: help; }
+.perf-chart-card { margin-top: 16px; }
+.bar-fill.neg { background: #F3B4B4; }
+.bar-zero { position: absolute; top: -4px; bottom: -4px; width: 1px; background: var(--muted); }
+.perf-notes { margin-top: 16px; font-size: .84rem; color: var(--muted); }
+.perf-notes h3 { font-size: .9rem; color: var(--ink); margin: 0 0 6px; }
+.perf-notes ul { margin: 0; padding-left: 18px; }
+.perf-notes li { margin-bottom: 3px; }
+.perf-notes b { color: var(--text); font-weight: 600; }
+
 /* ---------- footer ---------- */
 .foot { background: var(--ink); color: rgba(255,255,255,.7); font-size: .8rem; }
 .foot-inner { display: flex; gap: 28px; align-items: flex-start; padding: 26px var(--gutter); }
@@ -281,8 +302,9 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .brand-sep, .brand-text small { display: none; }
   .mark { width: 30px; height: 30px; }
   .nav-status { margin-left: auto; }
-  .tabs { order: 3; width: 100%; margin-left: 0; }
-  .tabs button { flex: 1; padding: 12px 0; }
+  .tabs { order: 3; width: 100%; margin-left: 0; overflow-x: auto; scrollbar-width: none; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button { flex: 1 0 auto; padding: 12px 12px; font-size: .88rem; }
   .kpis { grid-template-columns: 1fr 1fr; gap: 10px; }
   .kpi { padding: 14px; }
   .k-value { font-size: 1.6rem; }
