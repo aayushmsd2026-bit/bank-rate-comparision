@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nepal Bank Rates</title>
-  <meta name="description" content="Compare base, loan and deposit rates and quarterly results across Nepal's commercial banks, against any bank you choose.">
+  <meta name="description" content="Compare base, loan and deposit rates across Nepal's commercial banks, against any bank you choose.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%233451B2'/><path d='M9 22v-6m7 6V10m7 12v-9' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611050654">
+  <link rel="stylesheet" href="style.css?v=202611050715">
 </head>
 <body>
   <header class="nav">
@@ -25,7 +25,6 @@
         <button role="tab" data-tab="deposit" aria-selected="false">Deposits</button>
         <button role="tab" data-tab="loan" aria-selected="false">Lending</button>
         <button role="tab" data-tab="banks" aria-selected="false">Banks</button>
-        <button role="tab" data-tab="perf" aria-selected="false">Performance</button>
       </nav>
       <div class="nav-status">
         <span id="source-badge" class="pill">Loading…</span>
@@ -34,7 +33,7 @@
     </div>
     <div class="ref-bar">
       <label class="ref-pick">Comparing every figure against <select id="ref-select" aria-label="Bank to compare against"></select></label>
-      <span class="ref-hint">Change it any time · your choice is remembered, and the page link includes it so you can share this view</span>
+      <span class="ref-hint">Change it any time to see every page from another bank's point of view</span>
     </div>
   </header>
 
@@ -193,49 +192,6 @@
         <span>NPL = non-performing (bad) loans as a share of total loans</span>
       </p>
     </section>
-    <!-- Performance -->
-    <section id="tab-perf" class="panel" hidden>
-      <div class="head">
-        <div>
-          <h1>Quarterly performance</h1>
-          <p class="sub" id="perf-source"></p>
-        </div>
-        <div class="controls">
-          <select id="perf-quarter" aria-label="Quarter"></select>
-          <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
-        </div>
-      </div>
-      <div id="perf-body">
-        <div id="perf-kpis" class="kpis"></div>
-        <div class="perf-tools">
-          <div class="toggle wide" id="perf-groups" role="group" aria-label="Measures shown"></div>
-          <div class="perf-controls">
-            <input id="perf-search" type="search" placeholder="Find a bank…" aria-label="Find a bank" autocomplete="off">
-            <label class="lbl">Sort by <select id="perf-sort"></select></label>
-            <div class="toggle" id="perf-dir" role="group" aria-label="Sort order">
-              <button type="button" data-pdir="best" aria-pressed="true">Best first</button>
-              <button type="button" data-pdir="worst" aria-pressed="false">Worst first</button>
-            </div>
-            <span id="perf-count" class="dim"></span>
-          </div>
-        </div>
-        <article id="perf-h2h" class="card h2h-card" hidden></article>
-        <div class="sheet perf-sheet"><table id="perf-table" class="list banks perf"></table></div>
-        <p class="legend">
-          <span>Click any bank to compare it head to head with <span class="ref-label"></span></span>
-          <span><span class="rk t1">#1</span> rank among all banks: green top third · grey middle · red bottom third</span>
-          <span>Under each figure: the gap to <span class="ref-label"></span>, e.g. "Rs 0.60 arba below <span class="ref-label"></span>"</span>
-          <span><span class="star">★</span> Best of all banks</span>
-          <span><span class="flag">⚠</span> Check this figure (see notes)</span>
-        </p>
-        <article class="card perf-chart-card">
-          <header class="card-head chart-head"><div><h2 id="perf-chart-title"></h2><p>The line marks the average · <span class="ref-label"></span> highlighted</p></div>
-            <label class="lbl">Measure <select id="perf-chart-metric"></select></label></header>
-          <div id="perf-chart" class="bars"></div>
-        </article>
-        <div id="perf-notes" class="perf-notes"></div>
-      </div>
-    </section>
   </main>
 
   <footer class="foot">
@@ -251,6 +207,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202611050654"></script>
+  <script src="app.js?v=202611050715"></script>
 </body>
 </html>

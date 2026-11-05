@@ -22,6 +22,11 @@ const $ = (id) => document.getElementById(id);
 
 // ---------- loading ----------
 
+// Short label (NEPSE symbol) and full name of the comparison bank, for display.
+// Bank names are plain text (letters, spaces, dots, apostrophes), safe in HTML and Excel alike.
+const R = () => SCRIP[REF] || REF;
+const RN = () => state.model?.nameOf[REF] || REF;
+
 async function getJson(url, timeoutMs = 20000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -332,26 +337,20 @@ function arrow(diff, lowerIsBetter, vs = "this bank") {
 
 // ---------- rendering ----------
 
-// Reference bank: ?bank=SYMBOL in the link, else the viewer's last choice, else the first bank A–Z.
+// Comparison bank: NMB by default on every visit. A link with ?bank=SYMBOL opens on that bank;
+// switching in the page applies to this visit only.
+const DEFAULT_REF = "NMB Bank";
 function pickRef() {
   const m = state.model;
-  const bySymbol = (sym) => {
-    const up = String(sym || "").toUpperCase();
-    return m.banks.find((b) => (SCRIP[b.code] || "").toUpperCase() === up || (up === "RBBL" && b.code === "RBB"))?.code;
-  };
-  let saved = null;
-  try { saved = localStorage.getItem("nbr.ref"); } catch {}
-  const fromUrl = bySymbol(new URLSearchParams(location.search).get("bank"));
   const valid = (c) => c && m.banks.some((b) => b.code === c);
-  REF = fromUrl || (valid(REF) ? REF : valid(saved) ? saved : [...m.banks].sort((a, b) => a.name.localeCompare(b.name))[0]?.code);
+  if (valid(REF)) return;
+  const up = String(new URLSearchParams(location.search).get("bank") || "").toUpperCase();
+  const fromUrl = up && m.banks.find((b) => (SCRIP[b.code] || "").toUpperCase() === up || (up === "RBBL" && b.code === "RBB"))?.code;
+  REF = fromUrl || (valid(DEFAULT_REF) ? DEFAULT_REF : [...m.banks].sort((a, b) => a.name.localeCompare(b.name))[0]?.code);
 }
 
 function setRef(code) {
   REF = code;
-  try { localStorage.setItem("nbr.ref", code); } catch {}
-  const url = new URL(location.href);
-  url.searchParams.set("bank", SCRIP[code] || code);
-  history.replaceState(null, "", url);
   render();
 }
 
@@ -381,7 +380,6 @@ function render() {
   renderBaseTab();
   renderBanks();
   renderUpdates();
-  if (state.perf) renderPerformance();
   fitGrids();
 }
 
@@ -694,252 +692,6 @@ function renderBanks() {
   $("banks-table").innerHTML = head + `<tbody>${body}</tbody>`;
 }
 
-// ---------- quarterly performance ----------
-// data/performance.json holds one entry per quarter, keyed by NEPSE symbol.
-// Each quarter is added by hand from published quarterly figures (see README).
-
-// unit: arba = Rs arba (billion), pct = %, rs = Rs per share, x = times.
-// better: which direction ranks first; null = no better/worse (shown, not ranked).
-const PERF_METRICS = [
-  { key: "net_profit", label: "Net profit", unit: "arba", better: "high", groups: ["key", "profit"] },
-  { key: "net_profit_growth", label: "Profit growth", note: "vs same quarter last year", unit: "pct", better: "high", groups: ["key", "profit"], median: true },
-  { key: "deposits", label: "Deposits", unit: "arba", better: "high", groups: ["key", "size"] },
-  { key: "loans", label: "Loans", unit: "arba", better: "high", groups: ["key", "size"] },
-  { key: "paid_up_capital", label: "Paid-up capital", unit: "arba", better: "high", groups: ["size"] },
-  { key: "reserves", label: "Reserves", unit: "arba", better: "high", groups: ["size"] },
-  { key: "net_interest_income", label: "Net interest income", unit: "arba", better: "high", groups: ["profit"] },
-  { key: "roe", label: "Return on equity", unit: "pct", better: "high", groups: ["key", "profit"] },
-  { key: "roa", label: "Return on assets", unit: "pct", better: "high", groups: ["profit"] },
-  { key: "npl", label: "NPL ratio", note: "bad loans", unit: "pct", better: "low", groups: ["key", "quality"] },
-  { key: "car", label: "Capital adequacy", unit: "pct", better: "high", groups: ["key", "quality"] },
-  { key: "impairment", label: "Impairment charge", note: "loan-loss provisions", unit: "arba", better: "low", groups: ["quality"] },
-  { key: "cost_of_funds", label: "Cost of funds", unit: "pct", better: "low", groups: ["pricing"] },
-  { key: "interest_spread", label: "Interest spread", unit: "pct", better: "high", groups: ["pricing"] },
-  { key: "base_rate", label: "Base rate", unit: "pct", better: "low", groups: ["pricing"] },
-  { key: "cd_ratio", label: "CD ratio", note: "loans ÷ deposits", unit: "pct", better: null, groups: ["key", "pricing"] },
-  { key: "eps", label: "EPS", note: "annualised", unit: "rs", better: "high", groups: ["share"] },
-  { key: "distributable_profit_per_share", label: "Distributable profit / share", unit: "rs", better: "high", groups: ["share"] },
-  { key: "net_worth_per_share", label: "Net worth / share", unit: "rs", better: "high", groups: ["share"] },
-  { key: "pe_ratio", label: "P/E ratio", note: "at quarter end", unit: "x", better: null, groups: ["share"] },
-];
-const PERF_GROUPS = [["key", "Key figures"], ["profit", "Profitability"], ["size", "Size"], ["quality", "Asset quality & capital"], ["pricing", "Pricing & liquidity"], ["share", "Per share"], ["all", "All"]];
-// Short label (NEPSE symbol) and full name of the reference bank, for display.
-// Bank names are plain text (letters, spaces, dots, apostrophes), safe in HTML and Excel alike.
-const R = () => SCRIP[REF] || REF;
-const RN = () => state.model?.nameOf[REF] || state.perf?.names?.[refSym()] || REF;
-// The reference bank's symbol in performance.json (RBB is published as RBBL).
-const refSym = () => (REF === "RBB" ? "RBBL" : SCRIP[REF] || REF);
-
-async function loadPerformance() {
-  try {
-    state.perf = await getJson("data/performance.json?t=" + Date.now());
-    state.perfQ ||= state.perf.quarters[0]?.id;
-    renderPerformance();
-  } catch (err) {
-    $("perf-body").innerHTML = `<p class="notice">Could not load quarterly figures (${esc(err.message)}).</p>`;
-  }
-}
-
-const perfQuarter = () => state.perf?.quarters.find((q) => q.id === state.perfQ);
-const perfName = (sym) => state.perf?.names?.[sym] || sym;
-const perfVal = (q, sym, mt) => {
-  const v = q.banks[sym]?.[mt.key];
-  if (v === null || v === undefined || !Number.isFinite(v)) return null;
-  if (mt.key === "pe_ratio" && v <= 0) return null;   // unlisted (RBB) or loss-making: no meaningful P/E
-  return v;
-};
-function perfFmt(mt, v) {
-  if (v === null) return '<span class="na">—</span>';
-  if (mt.unit === "arba") return `Rs ${v.toFixed(2)}<small> arba</small>`;
-  if (mt.unit === "pct") return pct(v);
-  if (mt.unit === "rs") return `Rs ${v.toFixed(2)}`;
-  return `${v.toFixed(2)}×`;
-}
-function perfVsWords(mt, d) {
-  if (d === null || !Number.isFinite(d)) return "";
-  if (Math.abs(d) < 0.005) return `<div class="b-vs">same as ${R()}</div>`;
-  const g = Math.abs(d).toFixed(2);
-  const amt = mt.unit === "arba" ? `Rs ${g} arba` : mt.unit === "rs" ? `Rs ${g}` : mt.unit === "pct" ? `${g} pp` : g;
-  return `<div class="b-vs">${amt} ${d < 0 ? "below" : "above"} ${R()}</div>`;
-}
-// standing() finds the reference bank under its BankByaj code, so the reference bank's symbol is swapped for it here and back after.
-function perfStanding(q, mt) {
-  const toKey = (sym) => (sym === refSym() ? REF : sym);
-  const s = standing(Object.fromEntries(Object.keys(q.banks).map((sym) => [toKey(sym), perfVal(q, sym, mt)])), mt.better !== "high");
-  if (!s) return null;
-  const toSym = (k) => (k === REF ? refSym() : k);
-  // A few banks grow from a tiny base (e.g. +2,524%), so growth uses the median as its "average".
-  const vals = Object.keys(q.banks).map((sym) => perfVal(q, sym, mt)).filter((v) => v !== null).sort((a, b) => a - b);
-  const mid = vals.length % 2 ? vals[(vals.length - 1) / 2] : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2;
-  return { ...s, avg: mt.median ? mid : s.avg, avgLabel: mt.median ? "median" : "avg", minBanks: s.minBanks.map(toSym), maxBanks: s.maxBanks.map(toSym) };
-}
-
-// Rank of one bank on one measure (1 = best), or null when the measure isn't ranked.
-function perfRank(q, mt, sym) {
-  const v = perfVal(q, sym, mt);
-  if (!mt.better || v === null) return null;
-  const vals = Object.keys(q.banks).map((s) => perfVal(q, s, mt)).filter((x) => x !== null);
-  return { rank: 1 + vals.filter((x) => (mt.better === "high" ? x > v : x < v)).length, n: vals.length };
-}
-// Rank badge, coloured by third: top third green, middle grey, bottom third red.
-function rankChip(r) {
-  if (!r) return "";
-  const t = r.rank <= r.n / 3 ? "t1" : r.rank > (2 * r.n) / 3 ? "t3" : "t2";
-  return `<span class="rk ${t}" title="Rank ${r.rank} of ${r.n}">#${r.rank}</span>`;
-}
-
-function renderPerformance() {
-  const q = perfQuarter();
-  if (!q) return;
-  $("perf-quarter").innerHTML = state.perf.quarters.map((x) => `<option value="${esc(x.id)}" ${x.id === q.id ? "selected" : ""}>${esc(x.label)}</option>`).join("");
-  $("perf-source").innerHTML = `${esc(q.period)} · figures as compiled by <a href="${esc(q.source.url)}" target="_blank" rel="noopener">${esc(q.source.name)}</a> (${esc(q.source.published)}) from the banks' unaudited quarterly reports`;
-
-  // Headline figures for the reference bank
-  const rb = q.banks[refSym()] || {};
-  const card = (key, cls = "") => {
-    const mt = PERF_METRICS.find((m) => m.key === key);
-    const s = perfStanding(q, mt), v = perfVal(q, refSym(), mt);
-    const rank = s && s.rank && mt.better ? `${ordinal(s.rank)} ${mt.better === "high" ? "highest" : "lowest"} of ${s.n}` : "";
-    const extra = key === "net_profit" && rb.net_profit_growth !== undefined ? ` · ${rb.net_profit_growth >= 0 ? "+" : ""}${rb.net_profit_growth.toFixed(2)}% vs last year` : "";
-    return `<div class="kpi ${cls}"><div class="k-label">${esc(R())} · ${esc(mt.label)}${mt.note ? ` <span class="k-sub">(${esc(mt.note)})</span>` : ""}</div>
-      <div class="k-value">${perfFmt(mt, v)}</div><div class="k-note">${rank}${extra}${s ? ` · market ${s.avgLabel} ${perfFmt(mt, s.avg).replace(/<[^>]+>/g, "")}` : ""}</div></div>`;
-  };
-  $("perf-kpis").innerHTML = card("net_profit", "featured") + card("npl") + card("car") + card("roe") + card("cd_ratio");
-
-  // Controls
-  const group = state.perfGroup || "key";
-  $("perf-groups").innerHTML = PERF_GROUPS.map(([g, label]) => `<button type="button" data-pgroup="${g}" aria-pressed="${g === group}">${esc(label)}</button>`).join("");
-  const metrics = PERF_METRICS.filter((mt) => group === "all" || mt.groups.includes(group));
-  if (state.perfSort && !metrics.some((mt) => mt.key === state.perfSort)) state.perfSort = null;
-  const sortMt = PERF_METRICS.find((mt) => mt.key === state.perfSort);
-  $("perf-sort").innerHTML = `<option value="">Bank name (A–Z)</option>` + metrics.map((mt) => `<option value="${mt.key}" ${mt.key === state.perfSort ? "selected" : ""}>${esc(mt.label)}</option>`).join("");
-  $("perf-dir").hidden = !sortMt;
-  document.querySelectorAll("[data-pdir]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.pdir === (state.perfDir || "best"))));
-  if (sortMt && !sortMt.better) $("perf-dir").querySelector('[data-pdir="best"]').textContent = "High to low", $("perf-dir").querySelector('[data-pdir="worst"]').textContent = "Low to high";
-  else $("perf-dir").querySelector('[data-pdir="best"]').textContent = "Best first", $("perf-dir").querySelector('[data-pdir="worst"]').textContent = "Worst first";
-
-  renderPerfTable(q, metrics, sortMt);
-  renderHeadToHead(q);
-  const chartMt = PERF_METRICS.find((mt) => mt.key === (state.perfChart || sortMt?.key)) || PERF_METRICS[0];
-  $("perf-chart-metric").innerHTML = PERF_METRICS.map((mt) => `<option value="${mt.key}" ${mt.key === chartMt.key ? "selected" : ""}>${esc(mt.label)}</option>`).join("");
-  renderPerfChart(q, chartMt);
-
-  const notes = Object.entries(q.notes || {}).map(([k, v]) => {
-    const [sym, key] = k.includes(".") ? k.split(".") : [null, k];
-    const mt = PERF_METRICS.find((m) => m.key === key);
-    return `<li><b>${esc(sym ? `${sym} · ${mt?.label || key}` : mt?.label || key)}:</b> ${esc(v)}</li>`;
-  });
-  $("perf-notes").innerHTML = notes.length ? `<h3>Notes on the data</h3><ul>${notes.join("")}</ul>` : "";
-}
-
-function renderPerfTable(q, metrics, sortMt) {
-  const ref = refSym();
-  const term = (state.perfSearch || "").trim().toLowerCase();
-  let syms = Object.keys(q.banks).filter((s) => s !== ref && (!term || s.toLowerCase().includes(term) || perfName(s).toLowerCase().includes(term)));
-  if (sortMt) {
-    // "best first" follows the measure's direction; for unranked measures it means high to low.
-    let dir = sortMt.better === "low" ? 1 : -1;
-    if ((state.perfDir || "best") === "worst") dir = -dir;
-    syms.sort((a, b) => {
-      const va = perfVal(q, a, sortMt), vb = perfVal(q, b, sortMt);
-      if (va === null) return 1;
-      if (vb === null) return -1;
-      return (va - vb) * dir || a.localeCompare(b);
-    });
-  } else syms.sort((a, b) => perfName(a).localeCompare(perfName(b)));
-  const list = q.banks[ref] ? [ref, ...syms] : syms;
-  const stats = Object.fromEntries(metrics.map((mt) => [mt.key, perfStanding(q, mt)]));
-
-  let head = `<thead><tr><th class="rank-col">${sortMt ? "#" : ""}</th><th class="bank-col"><button type="button" data-psort="">Bank</button></th>`;
-  for (const mt of metrics) {
-    const s = stats[mt.key], on = state.perfSort === mt.key;
-    head += `<th class="num ${on ? "on" : ""}"><button type="button" data-psort="${mt.key}" title="Sort by ${esc(mt.label)}">${esc(mt.label)}${on ? ((state.perfDir || "best") === "best" ? " ↓" : " ↑") : ""}</button>
-      <div class="th-note">${mt.better ? (mt.better === "high" ? "higher is better" : "lower is better") : esc(mt.note || "not ranked")}</div>
-      ${s && s.rank && mt.better ? `<div class="th-rank">${esc(R())} ${s.rank}/${s.n}</div>` : ""}</th>`;
-  }
-  head += `</tr></thead>`;
-
-  let body = "", pos = 0;
-  for (const sym of list) {
-    const me = sym === ref;
-    if (!me) pos++;
-    const pr = sortMt ? perfRank(q, sortMt, sym) : null;
-    body += `<tr class="${me ? "ref-row" : "pick"}" ${me ? "" : `data-sym="${esc(sym)}" title="Compare ${esc(sym)} with ${esc(R())}"`}>
-      <td class="rank-col">${sortMt ? (pr ? pr.rank : "—") : ""}</td>
-      <td class="bank-col"><b>${esc(sym)}</b><span class="bank-full">${esc(perfName(sym))}${me ? " · your comparison bank" : ""}</span></td>`;
-    for (const mt of metrics) {
-      const v = perfVal(q, sym, mt), nv = perfVal(q, ref, mt), s = stats[mt.key];
-      const best = mt.better && s && v !== null && Math.abs(v - (mt.better === "high" ? s.max : s.min)) < 0.005 ? `<span class="star" title="Best of all banks">★</span>` : "";
-      const flag = q.notes?.[`${sym}.${mt.key}`] ? `<span class="flag" title="${esc(q.notes[`${sym}.${mt.key}`])}">⚠</span>` : "";
-      body += `<td class="num"><div class="cell-top"><span class="val">${perfFmt(mt, v)}</span>${best}${flag}${rankChip(perfRank(q, mt, sym))}</div>${me || v === null || nv === null ? "" : perfVsWords(mt, v - nv)}</td>`;
-    }
-    body += `</tr>`;
-  }
-  if (!syms.length) body += `<tr><td></td><td colspan="${metrics.length + 1}" class="empty-row">No bank matches “${esc(state.perfSearch)}”</td></tr>`;
-  const avg = metrics.map((mt) => `<td class="num">${stats[mt.key] ? perfFmt(mt, stats[mt.key].avg) + (mt.median ? '<div class="b-vs">median</div>' : "") : ""}</td>`).join("");
-  body += `<tr class="avg-row"><td></td><td class="bank-col">Average of ${Object.keys(q.banks).length} banks</td>${avg}</tr>`;
-  $("perf-table").innerHTML = head + `<tbody>${body}</tbody>`;
-  // the comparison bank's row sticks just under the column headings
-  const h = $("perf-table").tHead?.offsetHeight;
-  if (h) $("perf-table").style.setProperty("--perf-head-h", h + "px");
-  $("perf-count").textContent = term ? `${syms.length} of ${Object.keys(q.banks).length - 1} banks shown` : "";
-}
-
-// Side-by-side: the comparison bank vs one other bank, across every measure.
-function renderHeadToHead(q) {
-  const ref = refSym(), other = state.perfH2H;
-  const box = $("perf-h2h");
-  if (!other || other === ref || !q.banks[other]) { box.hidden = true; box.innerHTML = ""; return; }
-  let wins = 0, losses = 0, rows = "";
-  for (const [g, gl] of PERF_GROUPS.filter(([g]) => !["key", "all"].includes(g))) {
-    rows += `<tr class="h2h-seg"><td colspan="4">${esc(gl)}</td></tr>`;
-    for (const mt of PERF_METRICS.filter((m) => m.groups.includes(g))) {
-      const a = perfVal(q, ref, mt), b = perfVal(q, other, mt);
-      let verdict = "";
-      if (mt.better && a !== null && b !== null && Math.abs(a - b) >= 0.005) {
-        const refBetter = mt.better === "high" ? a > b : a < b;
-        refBetter ? wins++ : losses++;
-        verdict = `<span class="h2h-win ${refBetter ? "a" : "b"}">${esc(refBetter ? ref : other)}</span>`;
-      } else if (mt.better && a !== null && b !== null) verdict = `<span class="h2h-tie">level</span>`;
-      else verdict = `<span class="dim">${mt.better ? "—" : "not ranked"}</span>`;
-      rows += `<tr><td>${esc(mt.label)}</td>
-        <td class="num ${verdict.includes('class="h2h-win a"') ? "won" : ""}">${perfFmt(mt, a)} ${rankChip(perfRank(q, mt, ref))}</td>
-        <td class="num ${verdict.includes('class="h2h-win b"') ? "won" : ""}">${perfFmt(mt, b)} ${rankChip(perfRank(q, mt, other))}</td>
-        <td>${verdict}</td></tr>`;
-    }
-  }
-  const others = Object.keys(q.banks).filter((s) => s !== ref).sort();
-  box.hidden = false;
-  box.innerHTML = `<header class="card-head h2h-head">
-      <div><h2>Head to head: ${esc(ref)} vs <select id="perf-h2h-pick" aria-label="Bank to compare">${others.map((s) => `<option value="${esc(s)}" ${s === other ? "selected" : ""}>${esc(s)} · ${esc(perfName(s))}</option>`).join("")}</select></h2>
-      <p><b>${esc(ref)}</b> is better on <b>${wins}</b> of ${wins + losses} ranked measures; <b>${esc(other)}</b> on <b>${losses}</b>. Badges show each bank's rank among all ${Object.keys(q.banks).length}.</p></div>
-      <button type="button" class="btn-ghost dark" data-h2h-close title="Close">✕ Close</button>
-    </header>
-    <div class="h2h-wrap"><table class="h2h"><thead><tr><th>Measure</th><th class="num">${esc(ref)}</th><th class="num">${esc(other)}</th><th>Better</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-}
-
-// Ranked bars for one measure; bars grow from zero so negatives point left.
-function renderPerfChart(q, mt) {
-  const rows = Object.keys(q.banks).map((s) => ({ s, v: perfVal(q, s, mt) })).filter((r) => r.v !== null);
-  rows.sort((a, b) => (mt.better === "low" ? a.v - b.v : b.v - a.v));
-  const lo = Math.min(0, ...rows.map((r) => r.v)), hi = Math.max(0, ...rows.map((r) => r.v));
-  const span = hi - lo || 1;
-  const x = (v) => ((v - lo) / span) * 100;
-  const avg = perfStanding(q, mt)?.avg ?? 0;
-  $("perf-chart-title").textContent = `${mt.label}: all banks ranked${mt.better ? (mt.better === "high" ? ", highest first" : ", lowest first") : ""}`;
-  $("perf-chart").innerHTML = rows.map((r, i) => {
-    const me = r.s === refSym();
-    const left = Math.min(x(0), x(r.v)), width = Math.abs(x(r.v) - x(0));
-    return `<div class="bar-row ${me ? "me" : ""}">
-      <span class="bar-rank">${mt.better ? i + 1 : ""}</span>
-      <span class="bar-name" title="${esc(perfName(r.s))}"><b>${esc(r.s)}</b> <span class="bank-full">${esc(perfName(r.s))}</span></span>
-      <span class="bar-track">${lo < 0 ? `<i class="bar-zero" style="left:${x(0).toFixed(1)}%"></i>` : ""}<i class="bar-fill ${r.v < 0 ? "neg" : ""}" style="left:${left.toFixed(1)}%;width:${Math.max(width, 0.4).toFixed(1)}%"></i><i class="bar-avg" style="left:${x(avg).toFixed(1)}%" title="${mt.median ? "Median" : "Average"} ${perfFmt(mt, avg).replace(/<[^>]+>/g, "")}"></i></span>
-      <span class="bar-val">${perfFmt(mt, r.v).replace(/<small>.*?<\/small>/, "")}</span>
-      <span class="bar-vs">${me ? `${R()}` : perfVsWords(mt, r.v - perfVal(q, refSym(), mt)).replace(/<\/?div[^>]*>/g, "")}</span>
-    </div>`;
-  }).join("");
-}
-
 // Grids fill the window from their top edge down.
 function fitGrids() {
   document.querySelectorAll(".grid-wrap").forEach((el) => {
@@ -965,7 +717,7 @@ const PCT = "0.00%";
 const PP = '+0.00" pp";-0.00" pp";0.00" pp"';
 const GAP = '"▲ "0.00;"▼ "0.00;"="';
 const DIFF = () => `0.00" pp above ${R()}";0.00" pp below ${R()}";"same as ${R()}"`;
-const SHEET_FOR_TAB = { summary: "Overview", deposit: "Deposits", loan: "Lending", base: "Base rate", banks: "Banks", perf: "Performance" };
+const SHEET_FOR_TAB = { summary: "Overview", deposit: "Deposits", loan: "Lending", base: "Base rate", banks: "Banks" };
 
 let excelLib = null;
 function loadExcelJS() {
@@ -1278,45 +1030,6 @@ function addBanksSheet(wb) {
   finishSheet(ws, { headerRowNo: H, lastRow: r - 1, ncol: cols.length, xSplit: 1, widths: [28, ...metrics.flatMap(() => [13, 11]), 12, 10, 10] });
 }
 
-function addPerformanceSheet(wb) {
-  const q = perfQuarter();
-  if (!q) return;
-  const ws = wb.addWorksheet("Performance", { properties: { tabColor: { argb: XL.brand } } });
-  const fmtFor = (mt) => (mt.unit === "pct" ? '0.00"%"' : mt.unit === "x" ? '0.00"×"' : "#,##0.00");
-  const unitLabel = (mt) => (mt.unit === "arba" ? " (Rs arba)" : mt.unit === "pct" ? " (%)" : mt.unit === "rs" ? " (Rs)" : " (times)");
-  const cols = ["Symbol", "Bank", ...PERF_METRICS.map((mt) => mt.label + unitLabel(mt))];
-  sheetTitle(ws, `Quarterly performance — ${q.label}`, cols.length);
-  ws.getCell(2, 1).value = `${q.period} · figures as compiled by ${q.source.name} (${q.source.published}) from the banks' unaudited quarterly reports · ${q.source.url}`;
-  const H = 4;
-  headerRow(ws, H, cols, { textCols: 2, height: 44 });
-  const syms = [refSym(), ...Object.keys(q.banks).filter((s) => s !== refSym()).sort()];
-  syms.forEach((sym, i) => {
-    const x = ws.getRow(H + 1 + i);
-    x.values = [sym, perfName(sym), ...PERF_METRICS.map((mt) => perfVal(q, sym, mt))];
-    PERF_METRICS.forEach((mt, j) => (x.getCell(3 + j).numFmt = fmtFor(mt)));
-    if (sym === refSym()) for (let c = 1; c <= cols.length; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.brandInk } }; }
-  });
-  const end = H + syms.length;
-  styleBody(ws, H + 1, end, cols.length, { textCols: 2, band: true });
-  const rankRow = ws.getRow(end + 2), avgRow = ws.getRow(end + 3);
-  rankRow.getCell(2).value = `${R()} rank (1 = best)`; avgRow.getCell(2).value = "Average of all banks (profit growth: median)";
-  PERF_METRICS.forEach((mt, j) => {
-    const s = perfStanding(q, mt);
-    rankRow.getCell(3 + j).value = s && s.rank && mt.better ? `${s.rank} of ${s.n}` : "not ranked";
-    avgRow.getCell(3 + j).value = s ? asNum(s.avg) : null;
-    avgRow.getCell(3 + j).numFmt = fmtFor(mt);
-  });
-  for (const r of [rankRow, avgRow]) for (let c = 2; c <= cols.length; c++) { r.getCell(c).font = { bold: true, size: 10, color: { argb: XL.muted } }; r.getCell(c).alignment = { horizontal: c === 2 ? "left" : "center" }; }
-  let n = end + 5;
-  for (const [k, v] of Object.entries(q.notes || {})) {
-    ws.mergeCells(n, 1, n, cols.length);
-    ws.getCell(n, 1).value = `Note — ${k.replace(".", " · ")}: ${v}`;
-    ws.getCell(n, 1).font = { size: 9, italic: true, color: { argb: XL.muted } };
-    n++;
-  }
-  finishSheet(ws, { headerRowNo: H, lastRow: end, ncol: cols.length, xSplit: 2, widths: [9, 30, ...PERF_METRICS.map(() => 13)] });
-}
-
 function addDetailSheet(wb) {
   const m = state.model;
   const ws = wb.addWorksheet("All rates", { properties: { tabColor: { argb: XL.muted } } });
@@ -1393,7 +1106,6 @@ async function downloadExcel(btn) {
     addGridSheet(wb, "deposit");
     addGridSheet(wb, "loan");
     addBanksSheet(wb);
-    addPerformanceSheet(wb);
     addDetailSheet(wb);
     addNotesSheet(wb);
     const active = wb.worksheets.findIndex((w) => w.name === SHEET_FOR_TAB[state.tab]);
@@ -1421,7 +1133,6 @@ function showTab(tab) {
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "tab-" + tab));
   history.replaceState(null, "", location.search + "#" + tab);
-  if (tab === "perf" && state.perf) renderPerformance();
   fitGrids();
 }
 
@@ -1441,16 +1152,6 @@ document.addEventListener("click", (e) => {
     t.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
     return renderGrid(section);
   }
-  if (t.dataset.pgroup) { state.perfGroup = t.dataset.pgroup; return renderPerformance(); }
-  if (t.dataset.psort !== undefined) {
-    const k = t.dataset.psort || null;
-    // clicking the sorted column again flips best/worst first
-    if (k && state.perfSort === k) state.perfDir = (state.perfDir || "best") === "best" ? "worst" : "best";
-    else { state.perfSort = k; state.perfDir = "best"; state.perfChart = k || state.perfChart; }
-    return renderPerformance();
-  }
-  if (t.dataset.pdir) { state.perfDir = t.dataset.pdir; return renderPerformance(); }
-  if (t.dataset.h2hClose !== undefined) { state.perfH2H = null; return renderPerformance(); }
   if (t.dataset.bsort) {
     state.bankSort = state.bankSort === t.dataset.bsort ? null : t.dataset.bsort;
     return renderBanks();
@@ -1460,28 +1161,13 @@ document.addEventListener("click", (e) => {
     wrap.scrollTo({ top: row.offsetTop - wrap.querySelector("thead").offsetHeight, behavior: "smooth" });
   }
 });
-$("refresh").addEventListener("click", () => { load(); loadPerformance(); });
+$("refresh").addEventListener("click", load);
 $("ref-select").addEventListener("change", (e) => setRef(e.target.value));
-$("perf-quarter").addEventListener("change", (e) => { state.perfQ = e.target.value; renderPerformance(); });
-$("perf-sort").addEventListener("change", (e) => { state.perfSort = e.target.value || null; state.perfDir = "best"; if (e.target.value) state.perfChart = e.target.value; renderPerformance(); });
-$("perf-search").addEventListener("input", (e) => { state.perfSearch = e.target.value; const q = perfQuarter(); if (q) renderPerformance(); });
-$("perf-chart-metric").addEventListener("change", (e) => { state.perfChart = e.target.value; renderPerfChart(perfQuarter(), PERF_METRICS.find((m) => m.key === e.target.value)); });
-// Clicking a bank row opens the head-to-head comparison with the comparison bank.
-$("perf-table").addEventListener("click", (e) => {
-  if (e.target.closest("button")) return;
-  const tr = e.target.closest("tr[data-sym]");
-  if (!tr) return;
-  state.perfH2H = tr.dataset.sym;
-  renderPerformance();
-  $("perf-h2h").scrollIntoView({ behavior: "smooth", block: "start" });
-});
-document.addEventListener("change", (e) => { if (e.target.id === "perf-h2h-pick") { state.perfH2H = e.target.value; renderPerformance(); } });
 window.addEventListener("resize", fitGrids);
 
 state.order = "az";
 state.show = { loan: "premium", deposit: "range" };
 const initial = location.hash.slice(1);
-if (["summary", "loan", "deposit", "base", "banks", "perf"].includes(initial)) showTab(initial);
+if (["summary", "loan", "deposit", "base", "banks"].includes(initial)) showTab(initial);
 load();
-loadPerformance();
 setInterval(() => { if (!document.hidden) load(); }, AUTO_REFRESH_MS);

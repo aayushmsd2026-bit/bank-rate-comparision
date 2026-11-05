@@ -1,12 +1,12 @@
 # Nepal Bank Rates
 
-Compare base, loan and deposit rates and quarterly results across Nepal's commercial (Class A) banks, against any bank you choose.
+Compare base, loan and deposit rates across Nepal's commercial (Class A) banks, against any bank you choose.
 
 An independent project, not endorsed by any bank or by BankByaj. Rates come from the publicly available data on [bankbyaj.com](https://bankbyaj.com); figures are for information only.
 
 ## Choosing the comparison bank
 
-Every page compares the banks against one **comparison bank**, picked in the bar under the navigation. The choice is remembered in the browser and added to the page link, so `…/?bank=NABIL` (any NEPSE symbol; `RBB` for Rastriya Banijya Bank) opens with that bank selected. With no choice made, the first bank A–Z is used.
+Every page compares the banks against one **comparison bank**, picked in the bar under the navigation. It is **NMB Bank by default** on every visit; switching applies to the current visit only. A link with `?bank=SYMBOL` (any NEPSE symbol, e.g. `…/?bank=NABIL`; `RBB` for Rastriya Banijya Bank) opens on that bank instead.
 
 **Live site:** https://aayushmsd2026-bit.github.io/bank-rate-comparision/
 
@@ -24,20 +24,8 @@ Every page compares the banks against one **comparison bank**, picked in the bar
 | Deposits | Grid of every deposit product (rows) against every commercial bank (columns), with the same pinned columns as Lending: Fixed Deposit and Institutional FD by tenure (3 months – 10 years), then other term deposits, savings, foreign currency and call accounts |
 | Lending | Grid of every loan product (rows) against every commercial bank (columns), grouped into Home & property, Vehicle, Personal, Asset-backed, Business & priority sector. Each product's fixed-rate row sits under its variable-rate row. Product, the comparison bank and Rank/market-best columns stay pinned; bank headers show each base rate and its gap to the comparison bank. Shown by default as **premium over base rate** (re-ranked on the premium), with switches for the actual rate range or lowest rate. Bank columns (on Lending and Deposits) use NEPSE symbols (RBB is not listed) and each header states the bank's base rate gap to the comparison bank in words, e.g. "0.46 pp below the comparison bank" |
 | Banks | One row per bank: base rate (marked **new** if published this period), NPL ratio, 1-year FD, best FD at any tenure, top savings rate, lowest home loan, home loan premium over base, and deposit / loan lines offered. the comparison bank first; click a column to rank banks best first; market average at the bottom. Under each figure the gap to the comparison bank is written out, e.g. "4.42 pp below the comparison bank" (a comparison with the comparison bank, not a change over time) |
-| Performance | Quarterly results for every bank, with a bank search, sort-by and best/worst-first controls, frozen headings, rank badges (green top third, grey middle, red bottom third) and a head-to-head view (click any bank) comparing it with the comparison bank on every measure. Covers net profit and growth, deposits, loans, capital, reserves, net interest income, ROE/ROA, NPL, capital adequacy, impairment, cost of funds, spread, base rate, CD ratio, EPS, distributable profit and net worth per share and P/E. The comparison bank's headline figures, switchable groups of measures, gap to the comparison bank under every figure, click a column to rank and chart it, data notes. Profit growth uses the median as its "average" because a few banks grow from a tiny base |
 
-In both grids each cell shows the rate (range or single rate, switchable) with an arrow and the gap to the comparison bank in percentage points: green when the comparison bank is the better deal for the customer, red when the other bank is. ★ marks the best rate in the market. Banks can be ordered A–Z or by base rate, and the buttons above each grid jump to a section. **Download Excel** (on every tab) creates a formatted workbook in the browser: Overview, Base rate, Deposits, Lending, Banks, Performance, All rates (one row per bank × product, for filters and pivots) and Notes. Every table has filters and frozen panes, rates are real percentages, gaps are ▲/▼ numbers (green = the comparison bank ahead, red = behind), and the workbook opens on the sheet for the tab you were viewing. Built with [ExcelJS](https://github.com/exceljs/exceljs) 4.4.0 (MIT), bundled in `assets/vendor/` so no external CDN is needed.
-
-## Adding a new quarter (Performance tab)
-
-Quarterly results aren't available as a live feed, so each quarter is added by hand to `data/performance.json` (about 30 days after quarter end, once all banks have published):
-
-1. Add a new object at the **start** of `quarters` (the first one is shown by default), with the same fields as the existing quarter: `id` (e.g. `2083-84-Q2`), `label`, `period`, `source` (name, title, url, published date, basis) and `banks`, keyed by NEPSE symbol (RBB as `RBBL`).
-2. Amounts are in Rs arba (billion); ratios in %. `net_profit_prev` is the same quarter last year.
-3. Put anything that looks wrong in the source under `notes` as `"SYMBOL.field": "explanation"` — the site shows a ⚠ next to that figure.
-4. Check the totals and averages against those stated in the source before publishing.
-
-Q1 FY 2083/84 comes from ShareSansar's [Q1 analysis](https://www.sharesansar.com/newsdetail/unveiling-q1-208384-a-comprehensive-analysis-of-leading-commercial-banks-and-key-financial-insights-2026-11-03) (3 Nov 2026), compiled from the banks' unaudited reports; its totals and averages were cross-checked against the article text.
+In both grids each cell shows the rate (range or single rate, switchable) with an arrow and the gap to the comparison bank in percentage points: green when the comparison bank is the better deal for the customer, red when the other bank is. ★ marks the best rate in the market. Banks can be ordered A–Z or by base rate, and the buttons above each grid jump to a section. **Download Excel** (on every tab) creates a formatted workbook in the browser: Overview, Base rate, Deposits, Lending, Banks, All rates (one row per bank × product, for filters and pivots) and Notes. Every table has filters and frozen panes, rates are real percentages, gaps are ▲/▼ numbers (green = the comparison bank ahead, red = behind), and the workbook opens on the sheet for the tab you were viewing. Built with [ExcelJS](https://github.com/exceljs/exceljs) 4.4.0 (MIT), bundled in `assets/vendor/` so no external CDN is needed.
 
 ## Rules used
 
