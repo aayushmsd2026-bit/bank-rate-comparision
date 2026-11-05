@@ -3,21 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NMB Rate Comparison</title>
-  <meta name="description" content="NMB Bank's base, loan and deposit rates compared with every commercial bank in Nepal, synced live from BankByaj.">
-  <link rel="icon" href="assets/favicon.png">
+  <title>Nepal Bank Rates</title>
+  <meta name="description" content="A personal project comparing base, loan and deposit rates across Nepal's commercial banks, with NMB Bank as the reference bank.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%233451B2'/><path d='M9 22v-6m7 6V10m7 12v-9' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Hanken+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202610261715">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=202611050630">
 </head>
 <body>
   <header class="nav">
     <div class="nav-inner">
       <a class="brand" href="#summary" data-tab="summary">
-        <img src="assets/nmb-logo.png" alt="NMB Bank" class="logo">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#3451B2"/><path d="M9 22v-6m7 6V10m7 12v-9" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
         <span class="brand-sep"></span>
-        <span class="brand-text">Rate Comparison<small>Commercial banks · Nepal</small></span>
+        <span class="brand-text">Nepal Bank Rates<small>Commercial bank rate comparison · personal project</small></span>
       </a>
       <nav class="tabs" role="tablist" aria-label="Sections">
         <button role="tab" data-tab="summary" aria-selected="true">Overview</button>
@@ -41,7 +41,7 @@
       <div class="head">
         <div>
           <h1>Market position</h1>
-          <p class="sub">NMB Bank against Nepal's <span class="bank-count">20</span> commercial banks · <span class="stamp"></span></p>
+          <p class="sub">How NMB Bank compares with Nepal's other commercial banks (<span class="bank-count">20</span> in total) · <span class="stamp"></span></p>
         </div>
         <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
       </div>
@@ -77,7 +77,7 @@
       </p>
       <div class="section-title">
         <h2>In summary</h2>
-        <p>How NMB's rates compare with the average bank, across the products we offer</p>
+        <p>How NMB's rates compare with the average bank, across the products NMB offers</p>
       </div>
       <div id="kpis-summary" class="kpis kpis-3"></div>
     </section>
@@ -102,7 +102,7 @@
       <article class="card mx-card">
         <header class="card-head">
           <h2>Base rate matrix</h2>
-          <p>Each cell = <b>row bank's base rate − column bank's base rate</b>, in percentage points. Read along NMB's row to see how far above or below each bank we are; NMB's column shows the reverse.
+          <p>Each cell = <b>row bank's base rate − column bank's base rate</b>, in percentage points. Read along NMB's row to see how far above or below each bank NMB is; NMB's column shows the reverse.
             <span class="key-sw low"></span> row bank lower <span class="key-sw high"></span> row bank higher · hover a cell for the full sentence</p>
         </header>
         <div class="mx-wrap"><table id="base-matrix" class="mx"></table></div>
@@ -167,7 +167,7 @@
         <span><b class="chg good">▲</b> NMB cheaper (lower premium) than this bank</span>
         <span><b class="chg bad">▼</b> NMB dearer (higher premium) than this bank</span>
         <span><span class="star">★</span> Lowest in market</span>
-        <span>Column headings are NEPSE symbols (hover for the full name; RBB is not listed) · "0.46 pp below NMB" = that bank's base rate is 0.46 percentage points lower than ours · hover a cell for product names</span>
+        <span>Column headings are NEPSE symbols (hover for the full name; RBB is not listed) · "0.46 pp below NMB" = that bank's base rate is 0.46 percentage points lower than NMB's · hover a cell for product names</span>
       </p>
     </section>
 
@@ -192,16 +192,17 @@
 
   <footer class="foot">
     <div class="foot-inner">
-      <img src="assets/nmb-logo-white.png" alt="NMB Bank" class="foot-logo">
+      <svg class="foot-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#fff"/><path d="M9 22v-6m7 6V10m7 12v-9" stroke="#1E242A" stroke-width="3" stroke-linecap="round"/></svg>
       <div>
         <p class="stamp"></p>
-        <p>Source: <a href="https://bankbyaj.com" target="_blank" rel="noopener">bankbyaj.com</a>, read live on every visit with an hourly backup copy.
+        <p><b>Nepal Bank Rates</b> is an independent personal project, not affiliated with or endorsed by NMB Bank, BankByaj or any other bank. Figures are for information only; check them with the bank before relying on them.</p>
+        <p>Data:  <a href="https://bankbyaj.com" target="_blank" rel="noopener">bankbyaj.com</a>, read live on every visit with an hourly backup copy.
           Commercial banks = Class A. Loans: products named "Fixed" are fixed rate, all others variable; offer rates used where listed.
           Fixed deposit tenures are read from product names (e.g. "3Mto&lt;6M", "&gt;1Yto2Y", "5Y&amp;above").</p>
       </div>
     </div>
   </footer>
 
-  <script src="app.js?v=202610261715"></script>
+  <script src="app.js?v=202611050630"></script>
 </body>
 </html>

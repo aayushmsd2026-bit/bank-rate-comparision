@@ -1,6 +1,8 @@
-# NMB Bank rate comparison
+# Nepal Bank Rates
 
-A website comparing NMB Bank's base, loan and deposit rates with every commercial (Class A) bank in Nepal.
+A personal project comparing base, loan and deposit rates across Nepal's commercial (Class A) banks, using NMB Bank as the reference bank.
+
+It is independent and not affiliated with or endorsed by NMB Bank, BankByaj or any other bank. Rates come from the publicly available data on [bankbyaj.com](https://bankbyaj.com) and are for information only.
 
 **Live site:** https://aayushmsd2026-bit.github.io/bank-rate-comparision/
 
@@ -20,8 +22,6 @@ A website comparing NMB Bank's base, loan and deposit rates with every commercia
 | Banks | One row per bank: base rate (marked **new** if published this period), NPL ratio, 1-year FD, best FD at any tenure, top savings rate, lowest home loan, home loan premium over base, and deposit / loan lines offered. NMB first; click a column to rank banks best first; market average at the bottom. Under each figure the gap to NMB is written out, e.g. "4.42 pp below NMB" (a comparison with NMB, not a change over time) |
 
 In both grids each cell shows the rate (range or single rate, switchable) with an arrow and the gap to NMB in percentage points: green when NMB is the better deal for the customer, red when the other bank is. ★ marks the best rate in the market. Banks can be ordered A–Z or by base rate, and the buttons above each grid jump to a section. **Download Excel** (on every tab) creates a formatted workbook in the browser: Overview, Base rate, Deposits, Lending, Banks, All rates (one row per bank × product, for filters and pivots) and Notes. Every table has filters and frozen panes, rates are real percentages, gaps are ▲/▼ numbers (green = NMB ahead, red = behind), and the workbook opens on the sheet for the tab you were viewing. Built with [ExcelJS](https://github.com/exceljs/exceljs) 4.4.0 (MIT), bundled in `assets/vendor/` so no external CDN is needed.
-
-Branding (colours, fonts, logo) follows [nmb.com.np](https://www.nmb.com.np/en); the logo files are in `assets/`.
 
 ## Rules used
 

@@ -1,4 +1,5 @@
-// NMB Bank rate comparison. Reads the BankByaj API live in the browser and
+// Nepal Bank Rates: compares Nepal's commercial banks with NMB Bank as the
+// reference bank. Reads the BankByaj API live in the browser and
 // falls back to data/snapshot.json (refreshed hourly by GitHub Actions).
 "use strict";
 
@@ -382,10 +383,10 @@ function renderKpis() {
     nplKpi(),
   ].join("");
   $("kpis-summary").innerHTML = [
-    kpi("Deposits where we pay more", `${depWins}<small> of ${deps.length}</small>`,
-      `In ${depWins} of our ${deps.length} deposit products, NMB pays more than the average bank`),
-    kpi("Loans where we're cheaper", `${loanWins}<small> of ${loans.length}</small>`,
-      `In ${loanWins} of our ${loans.length} loan products, NMB charges less than the average bank`),
+    kpi("Deposits where NMB pays more", `${depWins}<small> of ${deps.length}</small>`,
+      `In ${depWins} of NMB's ${deps.length} deposit products, NMB pays more than the average bank`),
+    kpi("Loans where NMB is cheaper", `${loanWins}<small> of ${loans.length}</small>`,
+      `In ${loanWins} of NMB's ${loans.length} loan products, NMB charges less than the average bank`),
     kpi("Where NMB is No. 1", `${leads.length}<small> products</small>`, leads.length
       ? `Best rate of all ${m.banks.length} banks: ${esc(leadText.slice(0, 4).join(", ") + (leads.length > 4 ? ` and ${leads.length - 4} more` : ""))}`
       : "NMB doesn't have the best rate in any product today"),
@@ -470,7 +471,7 @@ function renderGrid(section) {
 
   let head = `<thead><tr>
     <th class="pin c1">Product</th>
-    <th class="pin c2 nmb"><img src="assets/nmb-logo-white.png" alt="NMB Bank" class="nmb-logo"><div class="b-base">Base <b>${pct(nmbBase)}</b>${freshTag(NMB)}</div></th>
+    <th class="pin c2 nmb"><div class="nmb-name" title="NMB Bank (reference bank)">NMB</div><div class="b-base">Base <b>${pct(nmbBase)}</b>${freshTag(NMB)}</div></th>
     <th class="pin c3">Rank<div class="b-base">best in market</div></th>`;
   for (const b of others) {
     const name = `<div class="b-name scrip" title="${bankLabel(b.code)}">${esc(SCRIP[b.code] || m.nameOf[b.code])}</div>`;
@@ -566,7 +567,7 @@ function renderBaseTab() {
   const shade = (d) => {
     if (Math.abs(d) < 0.005) return "";
     const a = (0.12 + 0.6 * Math.min(1, Math.abs(d) / maxAbs)).toFixed(2);
-    return d < 0 ? `background: rgba(0,142,176,${a})` : `background: rgba(217,154,6,${a})`;
+    return d < 0 ? `background: rgba(52,81,178,${a})` : `background: rgba(217,154,6,${a})`;
   };
   let head = `<thead><tr><th class="mx-corner">Row − column<br><span>(pp)</span></th>`;
   for (const c of list) head += `<th class="${c.code === NMB ? "me" : ""}" title="${esc(c.name)} · ${pct(c.v)}"><div>${esc(scripOf(c.code))}</div><span>${pct(c.v)}</span></th>`;
@@ -641,7 +642,7 @@ function renderBanks() {
   let body = "";
   for (const b of list) {
     const me = b.code === NMB;
-    body += `<tr class="${me ? "nmb-row" : ""}"><td class="bank">${me ? `<img src="assets/nmb-logo.png" alt="" class="row-logo">` : ""}${bankLabel(b.code)}</td>`;
+    body += `<tr class="${me ? "nmb-row" : ""}"><td class="bank">${bankLabel(b.code)}</td>`;
     for (const mt of metrics) {
       const v = mt.get(b.code), nv = mt.get(NMB), s = stats[mt.key];
       const best = s && v !== null && Math.abs(v - (mt.lower ? s.min : s.max)) < 0.005 ? `<span class="star" title="Best in market">★</span>` : "";
@@ -672,7 +673,7 @@ function fitGrids() {
 // numbers, so filters, sorting and pivots work. Gap format: ▲ green = NMB ahead,
 // ▼ red = NMB behind, matching the website.
 const XL = {
-  teal: "FF008EB0", tealInk: "FF00728E", tint: "FFE8F5F9", ink: "FF1E242A", muted: "FF64748B",
+  brand: "FF3451B2", brandInk: "FF2A4196", tint: "FFEEF2FC", ink: "FF1E242A", muted: "FF64748B",
   good: "FF15803D", goodBg: "FFE7F6EC", bad: "FFC81E1E", badBg: "FFFDECEC", band: "FFF8FAFC",
   hair: "FFE2E8F0", gold: "FFA16207", white: "FFFFFFFF",
 };
@@ -726,10 +727,10 @@ function headerRow(ws, rowNo, labels, opts = {}) {
     const c = row.getCell(i + 1);
     c.value = label;
     const nmb = opts.nmbCol && i + 1 === opts.nmbCol;
-    c.fill = fill(nmb ? XL.tealInk : XL.teal);
+    c.fill = fill(nmb ? XL.brandInk : XL.brand);
     c.font = { bold: true, color: { argb: XL.white }, size: 10 };
     c.alignment = { vertical: "middle", horizontal: i < (opts.textCols ?? 1) ? "left" : "center", wrapText: true };
-    c.border = { bottom: { style: "medium", color: { argb: XL.tealInk } } };
+    c.border = { bottom: { style: "medium", color: { argb: XL.brandInk } } };
   });
   row.height = opts.height || 32;
 }
@@ -756,7 +757,7 @@ function finishSheet(ws, { headerRowNo, lastRow, ncol, xSplit = 1, widths }) {
 
 function addOverviewSheet(wb) {
   const m = state.model;
-  const ws = wb.addWorksheet("Overview", { properties: { tabColor: { argb: XL.teal } } });
+  const ws = wb.addWorksheet("Overview", { properties: { tabColor: { argb: XL.brand } } });
   const cols = ["Section", "Segment", "Product", "Variant", "NMB rate", "NMB rank", "Banks", "Market best", "Best bank(s)", "Market average", "Market worst", "NMB vs average"];
   sheetTitle(ws, "Market position — scorecard", cols.length);
 
@@ -767,15 +768,15 @@ function addOverviewSheet(wb) {
   const kpis = [
     ["Base rate", asPct(base.nmb), PCT, `${ordinal(base.rank)} lowest of ${base.n} banks · market average ${pct(base.avg)}`],
     ["NPL ratio (bad loans)", asPct(npa?.nmb), PCT, npa ? `${ordinal(npa.rank)} lowest of ${npa.n} banks · market average ${pct(npa.avg)}` : ""],
-    ["Deposits where we pay more", `${deps.filter((r) => r.s.nmb >= r.s.avg - 0.005).length} of ${deps.length}`, null, "deposit products where NMB pays more than the average bank"],
-    ["Loans where we're cheaper", `${loans.filter((r) => r.s.nmb <= r.s.avg + 0.005).length} of ${loans.length}`, null, "loan products where NMB charges less than the average bank"],
+    ["Deposits where NMB pays more", `${deps.filter((r) => r.s.nmb >= r.s.avg - 0.005).length} of ${deps.length}`, null, "deposit products where NMB pays more than the average bank"],
+    ["Loans where NMB is cheaper", `${loans.filter((r) => r.s.nmb <= r.s.avg + 0.005).length} of ${loans.length}`, null, "loan products where NMB charges less than the average bank"],
     ["Where NMB is No. 1", state.rows.filter((r) => r.s.rank === 1).length, null, "best rate of all banks: " + state.rows.filter((r) => r.s.rank === 1).map(rowLabel).join(", ")],
   ];
   kpis.forEach(([label, value, fmt, note], i) => {
     const r = ws.getRow(4 + i);
     r.getCell(1).value = label; r.getCell(1).font = { bold: true, size: 10, color: { argb: XL.ink } };
     ws.mergeCells(4 + i, 1, 4 + i, 2);
-    r.getCell(3).value = value; r.getCell(3).font = { bold: true, size: 12, color: { argb: XL.tealInk } };
+    r.getCell(3).value = value; r.getCell(3).font = { bold: true, size: 12, color: { argb: XL.brandInk } };
     r.getCell(3).alignment = { horizontal: "left" };
     if (fmt) r.getCell(3).numFmt = fmt;
     ws.mergeCells(4 + i, 4, 4 + i, cols.length);
@@ -793,7 +794,7 @@ function addOverviewSheet(wb) {
     [8, 10, 11].forEach((c) => (row.getCell(c).numFmt = PCT));
     gapCell(row.getCell(12), s.nmb === null ? null : advantage(s.avg - s.nmb, lowerIsBetter));
     row.getCell(9).alignment = { horizontal: "left", vertical: "middle" };
-    row.getCell(5).font = { bold: true, color: { argb: s.nmb === null ? XL.muted : XL.tealInk }, size: 10 };
+    row.getCell(5).font = { bold: true, color: { argb: s.nmb === null ? XL.muted : XL.brandInk }, size: 10 };
   };
   line("Lending", "Funding", "Base rate", "", base, true, pct(base.nmb));
   for (const sec of ["deposit", "loan"]) {
@@ -810,7 +811,7 @@ function addOverviewSheet(wb) {
 function addGridSheet(wb, section) {
   const m = state.model;
   const isLoan = section === "loan";
-  const ws = wb.addWorksheet(isLoan ? "Lending" : "Deposits", { properties: { tabColor: { argb: isLoan ? XL.ink : XL.teal } } });
+  const ws = wb.addWorksheet(isLoan ? "Lending" : "Deposits", { properties: { tabColor: { argb: isLoan ? XL.ink : XL.brand } } });
   const banks = orderedBanks();
   const lead = isLoan ? ["Segment", "Product", "Variant"] : ["Segment", "Product"];
   const fixedCols = [...lead, "NMB rank", "Banks", "Market best", "Market average"];
@@ -831,7 +832,7 @@ function addGridSheet(wb, section) {
     const c = baseRow.getCell(nmbCol + i);
     c.value = asPct(m.base[b.code]); c.numFmt = PCT;
     c.font = { bold: true, size: 10, color: { argb: b.code === NMB ? XL.white : XL.ink } };
-    c.fill = fill(b.code === NMB ? XL.teal : XL.tint);
+    c.fill = fill(b.code === NMB ? XL.brand : XL.tint);
     c.alignment = { horizontal: "center" };
   });
 
@@ -850,7 +851,7 @@ function addGridSheet(wb, section) {
       const isBest = Math.abs(c.value - best) < 0.005;
       if (b.code === NMB) {
         cell.fill = fill(XL.tint);
-        cell.font = { bold: true, size: 10, color: { argb: isBest ? XL.gold : XL.tealInk } };
+        cell.font = { bold: true, size: 10, color: { argb: isBest ? XL.gold : XL.brandInk } };
         return;
       }
       if (nmb) {
@@ -869,7 +870,7 @@ function addGridSheet(wb, section) {
 
 function addBaseSheet(wb) {
   const m = state.model;
-  const ws = wb.addWorksheet("Base rate", { properties: { tabColor: { argb: XL.teal } } });
+  const ws = wb.addWorksheet("Base rate", { properties: { tabColor: { argb: XL.brand } } });
   const list = m.banks.filter((b) => m.base[b.code] !== undefined && m.base[b.code] !== null)
     .map((b) => ({ ...b, v: m.base[b.code] })).sort((a, b) => a.v - b.v || a.name.localeCompare(b.name));
   const nmb = m.base[NMB];
@@ -888,7 +889,7 @@ function addBaseSheet(wb) {
     x.getCell(4).numFmt = PCT;
     x.getCell(5).numFmt = DIFF;
     x.getCell(6).numFmt = '0.00" pp above avg";0.00" pp below avg";"at average"';
-    if (b.code === NMB) for (let c = 1; c <= cols.length; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.tealInk } }; }
+    if (b.code === NMB) for (let c = 1; c <= cols.length; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.brandInk } }; }
   });
   const end = H + n;
   styleBody(ws, H + 1, end, cols.length, { textCols: 3, band: true });
@@ -911,7 +912,7 @@ function addBaseSheet(wb) {
   for (let j = 1; j <= n + 1; j++) {
     const cell = hdr.getCell(j);
     const me = j > 1 && list[j - 2].code === NMB;
-    cell.fill = fill(me ? XL.tealInk : XL.teal);
+    cell.fill = fill(me ? XL.brandInk : XL.brand);
     cell.font = { bold: true, size: 9, color: { argb: XL.white } };
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   }
@@ -920,14 +921,14 @@ function addBaseSheet(wb) {
   const tint = (d) => {
     const t = Math.min(1, Math.abs(d) / maxAbs);
     const mix = (a, b) => Math.round(a + (b - a) * (0.15 + 0.6 * t)).toString(16).padStart(2, "0");
-    return d < 0 ? `FF${mix(255, 0)}${mix(255, 142)}${mix(255, 176)}` : `FF${mix(255, 217)}${mix(255, 154)}${mix(255, 6)}`;
+    return d < 0 ? `FF${mix(255, 52)}${mix(255, 81)}${mix(255, 178)}` : `FF${mix(255, 217)}${mix(255, 154)}${mix(255, 6)}`;
   };
   list.forEach((r, i) => {
     const x = ws.getRow(M + 1 + i);
     const rowMe = r.code === NMB;
     x.getCell(1).value = `${scripOf(r.code)} (${pct(r.v)})`;
     x.getCell(1).font = { bold: true, size: 9, color: { argb: rowMe ? XL.white : XL.ink } };
-    x.getCell(1).fill = fill(rowMe ? XL.tealInk : XL.tint);
+    x.getCell(1).fill = fill(rowMe ? XL.brandInk : XL.tint);
     list.forEach((c, j) => {
       const cell = x.getCell(2 + j);
       cell.alignment = { horizontal: "center" };
@@ -950,7 +951,7 @@ function addBaseSheet(wb) {
 
 function addBanksSheet(wb) {
   const m = state.model;
-  const ws = wb.addWorksheet("Banks", { properties: { tabColor: { argb: XL.teal } } });
+  const ws = wb.addWorksheet("Banks", { properties: { tabColor: { argb: XL.brand } } });
   const metrics = bankMetrics().filter((mt) => !mt.count);
   const count = (sec, code) => state.rows.filter((r) => r.section === sec && r.cells[code]).length;
   const cols = ["Bank", ...metrics.flatMap((mt) => [`${mt.label} (${mt.note})`, `${mt.label}: bank − NMB`]), "New base rate this period", "Deposit lines", "Loan lines"];
@@ -977,7 +978,7 @@ function addBanksSheet(wb) {
       dc.numFmt = DIFF;
       dc.font = { size: 10, color: { argb: XL.muted } };
     });
-    if (me) for (let c = 1; c <= cols.length; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.tealInk } }; }
+    if (me) for (let c = 1; c <= cols.length; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.brandInk } }; }
   }
   styleBody(ws, H + 1, r - 1, cols.length, { band: true });
   // Market average below the filtered range
@@ -1020,7 +1021,7 @@ function addDetailSheet(wb) {
       [6, 7, 8, 10].forEach((k) => (x.getCell(k).numFmt = PCT));
       x.getCell(9).numFmt = PP;
       gapCell(x.getCell(11), me || !nmb ? null : advantage(c.value - nmb.value, row.lowerIsBetter));
-      if (me) for (let k = 1; k <= cols.length; k++) { x.getCell(k).fill = fill(XL.tint); x.getCell(k).font = { bold: true, size: 10, color: { argb: XL.tealInk } }; }
+      if (me) for (let k = 1; k <= cols.length; k++) { x.getCell(k).fill = fill(XL.tint); x.getCell(k).font = { bold: true, size: 10, color: { argb: XL.brandInk } }; }
     }
   }
   styleBody(ws, H + 1, r - 1, cols.length, { textCols: 5 });
@@ -1044,7 +1045,7 @@ function addNotesSheet(wb) {
   ];
   notes.forEach(([k, v], i) => {
     const row = ws.getRow(4 + i);
-    row.getCell(1).value = k; row.getCell(1).font = { bold: true, size: 10, color: { argb: XL.tealInk } };
+    row.getCell(1).value = k; row.getCell(1).font = { bold: true, size: 10, color: { argb: XL.brandInk } };
     row.getCell(2).value = v; row.getCell(2).font = { size: 10, color: { argb: XL.ink } };
     row.getCell(1).alignment = { vertical: "top" }; row.getCell(2).alignment = { vertical: "top", wrapText: true };
     row.getCell(1).border = hairBorder; row.getCell(2).border = hairBorder;
@@ -1060,7 +1061,7 @@ async function downloadExcel(btn) {
   try {
     const ExcelJS = await loadExcelJS();
     const wb = new ExcelJS.Workbook();
-    wb.creator = "NMB Bank Rate Comparison";
+    wb.creator = "Nepal Bank Rates (personal project)";
     wb.created = new Date();
     addOverviewSheet(wb);
     addBaseSheet(wb);
@@ -1074,7 +1075,7 @@ async function downloadExcel(btn) {
     const buf = await wb.xlsx.writeBuffer();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-    a.download = `NMB-Rate-Comparison-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `Nepal-Bank-Rates-${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
