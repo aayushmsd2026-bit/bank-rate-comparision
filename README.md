@@ -1,4 +1,4 @@
-# Nepal Bank Rates
+# Bank Tulana (बैंक तुलना)
 
 Compare Nepal's 20 commercial (Class A) banks: live deposit and lending rates, base rates, and Nepal Rastra Bank's monthly balance-sheet figures — all measured against one comparison bank you choose.
 

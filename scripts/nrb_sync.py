@@ -33,7 +33,7 @@ import openpyxl
 
 LIST_URL = "https://www.nrb.org.np/category/monthly-statistics/{page}?department=bfr"
 OUT = Path(__file__).resolve().parent.parent / "data" / "nrb" / "financials.json"
-UA = "nepal-bank-rates-sync/1.0 (+https://github.com/aayushmsd2026-bit/bank-rate-comparision)"
+UA = "bank-tulana-sync/1.0 (+https://github.com/aayushmsd2026-bit/bank-rate-comparision)"
 
 # NRB column name -> BankByaj institute_code used by the site.
 BANKS = {

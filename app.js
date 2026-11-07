@@ -1,4 +1,4 @@
-// Nepal Bank Rates: compares Nepal's commercial banks with the reference bank as the
+// Bank Tulana: compares Nepal's commercial banks with the reference bank as the
 // reference bank. Reads the BankByaj API live in the browser and
 // falls back to data/snapshot.json (refreshed hourly by GitHub Actions).
 "use strict";
@@ -1690,7 +1690,7 @@ async function downloadExcel(btn) {
     btn.textContent = "Preparing…";
     const ExcelJS = await loadExcelJS();
     const wb = new ExcelJS.Workbook();
-    wb.creator = "Nepal Bank Rates (personal project)";
+    wb.creator = "Bank Tulana (independent project)";
     wb.created = new Date();
     addOverviewSheet(wb);
     addBaseSheet(wb);
@@ -1705,7 +1705,7 @@ async function downloadExcel(btn) {
     const buf = await wb.xlsx.writeBuffer();
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
-    a.download = `Nepal-Bank-Rates-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.download = `Bank-Tulana-${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
