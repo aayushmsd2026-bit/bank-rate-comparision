@@ -836,7 +836,7 @@ async function loadFinancials() {
   }
 }
 const finMonth = () => state.fin?.months.find((m) => m.id === state.finMonth) || state.fin?.months.at(-1);
-const FIN_SECTIONS = [["deposit", "Deposits"], ["loan", "Loans"], ["profit", "Profit & efficiency"]];
+const FIN_SECTIONS = [["deposit", "Deposits"], ["loan", "Loans"], ["profit", "Profit & efficiency"], ["matrix", "All banks side by side"]];
 
 function renderFinancials() {
   const m = finMonth();
@@ -847,6 +847,8 @@ function renderFinancials() {
   $("fin-source").innerHTML = `Nepal Rastra Bank monthly statistics · position at <b>${esc(m.bs)}</b> (${esc(m.label)}) · profit figures are this fiscal year to date (${m.fy_month} month${m.fy_month > 1 ? "s" : ""}) · <a href="${esc(m.source)}" target="_blank" rel="noopener">NRB file</a>`;
   $("fin-sections").innerHTML = FIN_SECTIONS.map(([k, l]) => `<button type="button" data-fsec="${k}" aria-pressed="${k === state.finSection}">${esc(l)}</button>`).join("");
   document.querySelectorAll(".ref-label").forEach((el) => (el.textContent = R()));
+  $("fin-trend").hidden = false; $("fin-rank").hidden = false;
+  if (state.finSection === "matrix") return renderFinMatrix(m);
   if (state.finSection === "profit") return renderFinProfit(m);
   const kind = state.finSection === "deposit" ? "deposit" : state.finLoanView;
   renderFinSnapshot(m);
@@ -996,6 +998,125 @@ function renderFinProfit(m) {
     }).join("")}</tbody></table></div>`;
 }
 
+// "All banks side by side": every line item or measure (rows) × every bank (columns).
+const MX_MODES = [["amt", "Amount"], ["share", "Market share"], ["mix", "% of own book"], ["rank", "Rank"], ["growth", "1-year growth"]];
+const MX_GROUPS = [["all", "Everything"], ["deposit", "Deposits"], ["product", "Loan products"], ["sector", "Loan sectors"], ["profit", "Profitability"]];
+const MX_PROFIT = ["net_profit", "nii", "fee_income", "cost_income", "roa", "roe", "cost_of_deposits", "yield_on_loans", "spread", "cd_ratio"];
+
+// Rows of the matrix for the chosen month: [{group, label, key, kind:'item'|'metric', cells:{code:{...}}}]
+function matrixRows(m) {
+  const rows = [];
+  const itemRow = (group, it) => {
+    const cells = {};
+    for (const c of Object.keys(m.banks)) { const f = itemFacts(m, c, it); if (f) cells[c] = f; }
+    rows.push({ group, label: it.label, key: it.key, kind: "item", it, total: !!it.total, memo: !!it.memo, cells, market: Object.values(cells)[0]?.market });
+  };
+  const add = (kind, group) => {
+    const g = FIN_ITEMS[kind];
+    if (kind !== "sector") itemRow(group, itemByKey(g.base));
+    g.items.forEach((it) => itemRow(group, { ...it, kind, base: g.base }));
+  };
+  add("deposit", "deposit"); add("product", "product"); add("sector", "sector");
+  for (const k of MX_PROFIT) {
+    const mt = FIN_METRICS.find((x) => x.key === k);
+    const vals = Object.keys(m.banks).map((c) => [c, finVal(m, c, mt)]).filter(([, v]) => v !== null);
+    const cells = {};
+    for (const [c, v] of vals) cells[c] = { val: v, rank: mt.better ? 1 + vals.filter(([, x]) => (mt.better === "high" ? x > v : x < v)).length : null, n: vals.length };
+    const s = finStats(m, mt);
+    rows.push({ group: "profit", label: mt.label, note: mt.note, key: k, kind: "metric", mt, cells, avg: s?.avg, avgLabel: s?.avgLabel });
+  }
+  return rows;
+}
+
+function mxCellText(row, f, mode) {
+  if (!f) return "—";
+  if (row.kind === "metric") return mode === "rank" ? (f.rank ? `#${f.rank}` : "—") : finFmt(row.mt, f.val);
+  if (mode === "amt") return arba(f.amt) >= 100 ? arba(f.amt).toFixed(1) : arba(f.amt).toFixed(2);
+  if (mode === "share") return fmtPct(f.share, 1);
+  if (mode === "mix") return row.total ? "100%" : fmtPct(f.mix, 1);
+  if (mode === "rank") return `#${f.rank}`;
+  if (mode === "growth") return f.growth === null ? "—" : fmtSigned(f.growth, "%", 0);
+  return "";
+}
+// Rank within the row for the shown measure (amount/share share one ranking; mix and growth rank separately).
+function mxRank(row, code, mode) {
+  const f = row.cells[code];
+  if (!f) return null;
+  if (row.kind === "metric") return f.rank ? { r: f.rank, n: f.n } : null;
+  const key = mode === "mix" ? "mix" : mode === "growth" ? "growth" : "amt";
+  const v = f[key];
+  if (v === null || v === undefined) return null;
+  const vals = Object.values(row.cells).map((x) => x[key]).filter((x) => x !== null && x !== undefined);
+  return { r: 1 + vals.filter((x) => x > v).length, n: vals.length };
+}
+function mxShade(rk) {
+  if (!rk || rk.n < 2) return "";
+  const t = 1 - (rk.r - 1) / (rk.n - 1);   // 1 = best in row
+  const a = (0.06 + 0.62 * t * t).toFixed(2);
+  return `background: rgba(52,81,178,${a});${t * t > 0.55 ? "color:#fff;" : ""}`;
+}
+
+function renderFinMatrix(m) {
+  const mode = state.mxMode || "amt", group = state.mxGroup || "all", order = state.mxOrder || "loans";
+  const rows = matrixRows(m).filter((r) => group === "all" || r.group === group);
+  const others = Object.keys(m.banks).filter((c) => c !== REF);
+  if (order === "az") others.sort((a, b) => (SCRIP[a] || a).localeCompare(SCRIP[b] || b));
+  else others.sort((a, b) => (m.banks[b][order] || 0) - (m.banks[a][order] || 0));
+  const cols = [REF, ...others].filter((c) => m.banks[c]);
+
+  $("fin-kpis").innerHTML = "";
+  $("fin-kpis").className = "kpis fin-kpis empty";
+  $("fin-trend").innerHTML = ""; $("fin-trend").hidden = true;
+  $("fin-rank").innerHTML = ""; $("fin-rank").hidden = true;
+
+  const tog = (attr, list, cur) => `<div class="toggle" role="group">${list.map(([k, l]) => `<button type="button" data-${attr}="${k}" aria-pressed="${k === cur}">${esc(l)}</button>`).join("")}</div>`;
+  const groupNames = Object.fromEntries([["deposit", "Deposits"], ["product", "Loans by product"], ["sector", "Loans by sector"], ["profit", "Profitability & efficiency"]]);
+  const unitNote = mode === "amt" ? "Rs arba" : mode === "share" ? "% of all 20 banks' total" : mode === "mix" ? "% of the bank's own deposits or loans" : mode === "rank" ? "1 = largest (or best)" : "change against the same month last year";
+
+  let head = `<thead><tr><th class="mx-item">Line item <span class="mx-unit">${esc(unitNote)}</span></th><th class="mx-lead">Leader</th>`;
+  for (const c of cols) head += `<th class="${c === REF ? "mx-ref" : ""}" title="${esc(bankName(c))}"><span class="mx-sym">${esc(SCRIP[c] || c)}</span></th>`;
+  head += `<th class="mx-mkt">${mode === "amt" ? "All banks" : "Market"}</th></tr></thead>`;
+
+  let body = "", g = null;
+  for (const row of rows) {
+    if (row.group !== g) { g = row.group; body += `<tr class="mx-seg"><td class="mx-item" colspan="2">${esc(groupNames[g])}</td><td colspan="${cols.length + 1}"></td></tr>`; }
+    // leader on the shown measure (profit rows: best on the measure)
+    let lead = null;
+    for (const c of cols) { const rk = mxRank(row, c, mode); if (rk && rk.r === 1) { lead = c; break; } }
+    const rowMode = row.kind === "metric" && mode !== "rank" ? "val" : mode;
+    body += `<tr class="${row.total ? "mx-total" : ""} ${row.memo ? "mx-memo" : ""}"><td class="mx-item">${esc(row.label)}${row.note ? `<span>${esc(row.note)}</span>` : ""}${row.memo ? "<span>memo, overlaps other products</span>" : ""}</td>
+      <td class="mx-lead">${lead ? `<b>${esc(SCRIP[lead] || lead)}</b>` : "—"}</td>`;
+    for (const c of cols) {
+      const f = row.cells[c];
+      const rk = mxRank(row, c, mode);
+      const tip = !f ? "" : row.kind === "metric"
+        ? `${bankName(c)} · ${row.label}: ${finFmt(row.mt, f.val)}${f.rank ? ` · rank ${f.rank} of ${f.n}` : ""}`
+        : `${bankName(c)} · ${row.label}: ${fmtArba(f.amt)} · ${row.total ? "" : `${fmtPct(f.mix)} of its ${row.it.base} · `}${fmtPct(f.share, 2)} market share · rank ${f.rank} of ${f.n}${f.growth !== null ? ` · ${fmtSigned(f.growth)} in a year` : ""}`;
+      body += `<td class="${c === REF ? "mx-ref" : ""}" style="${mxShade(rk)}" title="${esc(tip)}">${mxCellText(row, f, rowMode)}</td>`;
+    }
+    // market column
+    let mk = "—";
+    if (row.kind === "metric") mk = row.avg === undefined ? "—" : `${finFmt(row.mt, row.avg)}${row.avgLabel === "median" ? "*" : ""}`;
+    else if (mode === "amt") mk = fmtArba(row.market).replace("Rs ", "").replace(" arba", "");
+    else if (mode === "share") mk = "100%";
+    else if (mode === "mix") mk = row.total ? "100%" : fmtPct(Object.values(row.cells)[0]?.mktMix);
+    else if (mode === "growth") mk = fmtSigned(Object.values(row.cells)[0]?.mktGrowth ?? null, "%", 0);
+    else mk = `${Object.keys(row.cells).length} banks`;
+    body += `<td class="mx-mkt">${mk}</td></tr>`;
+  }
+
+  $("fin-breakdown").innerHTML = `<header class="card-head chart-head"><div>
+      <h2>All banks side by side · ${esc(m.bs)}</h2>
+      <p>Each row is shaded by rank within that row: darker = larger (or better). ${esc(R())} is pinned first · hover a cell for its full figures</p></div></header>
+    <div class="mx-controls">
+      <label class="lbl">Show ${tog("mxmode", MX_MODES, mode)}</label>
+      <label class="lbl">Rows ${tog("mxgroup", MX_GROUPS, group)}</label>
+      <label class="lbl">Bank order ${tog("mxorder", [["loans", "By loans"], ["deposits", "By deposits"], ["az", "A–Z"]], order)}</label>
+    </div>
+    <div class="mx-wrap"><table class="mx2">${head}<tbody>${body}</tbody></table></div>
+    <p class="legend mx-legend"><span>Profitability rows always show their own measure (switch to <b>Rank</b> to rank them)</span><span>* market median</span><span>Amounts in Rs arba (billion)</span></p>`;
+}
+
 // Overview: the latest NRB position of the comparison bank, in one block.
 function renderOverviewFinancials() {
   const box = $("ov-fin");
@@ -1047,7 +1168,7 @@ const PCT = "0.00%";
 const PP = '+0.00" pp";-0.00" pp";0.00" pp"';
 const GAP = '"▲ "0.00;"▼ "0.00;"="';
 const DIFF = () => `0.00" pp above ${R()}";0.00" pp below ${R()}";"same as ${R()}"`;
-const SHEET_FOR_TAB = { summary: "Overview", deposit: "Deposits", loan: "Lending", base: "Base rate", banks: "Banks", fin: "Fin loan products" };
+const SHEET_FOR_TAB = { summary: "Overview", deposit: "Deposits", loan: "Lending", base: "Base rate", banks: "Banks", fin: "Fin side by side (Rs arba)" };
 
 let excelLib = null;
 function loadExcelJS() {
@@ -1396,6 +1517,35 @@ function addFinancialSheets(wb) {
   breakdown("Fin loan products", "Loans by product", "product");
   breakdown("Fin loan sectors", "Loans by sector", "sector");
 
+  // Every line item × every bank: amounts, then market shares
+  const mxRowsAll = matrixRows(m).filter((r) => r.kind === "item");
+  for (const [sheet, title, pick, nf] of [["Fin side by side (Rs arba)", "All banks side by side — amounts (Rs arba)", (f) => r2(arba(f.amt)), "#,##0.00"],
+                                          ["Fin side by side (share %)", "All banks side by side — market share (%)", (f) => r2(f.share), '0.00"%"']]) {
+    const wsx = wb.addWorksheet(sheet, { properties: { tabColor: { argb: XL.brand } } });
+    const mcols = ["Section", "Line item", ...codes.map((c) => SCRIP[c] || c), "Leader", `${R()} rank`];
+    sheetTitle(wsx, `${title} — ${m.bs}`, mcols.length);
+    wsx.getCell(2, 1).value = intro;
+    const MH = 4;
+    headerRow(wsx, MH, mcols, { textCols: 2, height: 30, refCol: 3 });
+    const names = { deposit: "Deposits", product: "Loans by product", sector: "Loans by sector" };
+    mxRowsAll.forEach((row, i) => {
+      const x = wsx.getRow(MH + 1 + i);
+      const leader = Object.entries(row.cells).sort((a, b) => b[1].amt - a[1].amt)[0]?.[0];
+      x.values = [names[row.group], row.label + (row.memo ? " (memo)" : ""), ...codes.map((c) => (row.cells[c] ? pick(row.cells[c]) : null)), leader ? SCRIP[leader] || leader : "", row.cells[REF] ? `${row.cells[REF].rank} of ${row.cells[REF].n}` : ""];
+      codes.forEach((c, j) => {
+        const cell = x.getCell(3 + j); cell.numFmt = nf;
+        const f = row.cells[c]; if (!f) return;
+        const t = 1 - (f.rank - 1) / Math.max(1, f.n - 1);
+        if (t * t > 0.04) cell.fill = fill("FF" + [52, 81, 178].map((v) => Math.round(255 - (255 - v) * (0.06 + 0.62 * t * t))).map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase());
+        if (t * t > 0.55) cell.font = { size: 10, color: { argb: XL.white }, bold: c === REF };
+        else if (c === REF) cell.font = { size: 10, bold: true, color: { argb: XL.brandInk } };
+      });
+      if (row.total) { x.getCell(2).font = { bold: true, size: 10, color: { argb: XL.ink } }; }
+    });
+    styleBody(wsx, MH + 1, MH + mxRowsAll.length, mcols.length, { textCols: 2 });
+    finishSheet(wsx, { headerRowNo: MH, lastRow: MH + mxRowsAll.length, ncol: mcols.length, xSplit: 3, widths: [16, 40, ...codes.map(() => 9), 9, 10] });
+  }
+
   // Profitability and efficiency
   const ws = wb.addWorksheet("Fin profitability", { properties: { tabColor: { argb: XL.brand } } });
   const fmt = (mt) => (mt.unit === "arba" ? "#,##0.00" : '0.00"' + (mt.unit === "pp" ? " pp" : "%") + '"');
@@ -1475,7 +1625,7 @@ function addNotesSheet(wb) {
   const ws = wb.addWorksheet("Notes", { properties: { tabColor: { argb: XL.muted } } });
   sheetTitle(ws, "How to read this workbook", 2);
   const notes = [
-    ["Sheets", `Overview: headline figures and ${R()}'s rank, market best/average/worst for every product.\nDeposits / Lending: every bank's rate per product, ${R()} first, base rates above the header.\nBase rate: ranking and a bank-by-bank base rate matrix.\nBanks: base rate, NPL and key rates per bank.\nFin deposits / Fin loan products / Fin loan sectors / Fin profitability: Nepal Rastra Bank's monthly figures for every bank (amount, % of the bank's total, market share).\nFin trend: the comparison bank month by month.\nAll rates: one row per bank and product, with ranges and premiums, for filtering and pivot tables.`],
+    ["Sheets", `Overview: headline figures and ${R()}'s rank, market best/average/worst for every product.\nDeposits / Lending: every bank's rate per product, ${R()} first, base rates above the header.\nBase rate: ranking and a bank-by-bank base rate matrix.\nBanks: base rate, NPL and key rates per bank.\nFin deposits / Fin loan products / Fin loan sectors / Fin profitability: Nepal Rastra Bank's monthly figures for every bank (amount, % of the bank's total, market share).\nFin side by side: every line item for every bank (amounts, and market shares), shaded by rank within the row.\nFin trend: the comparison bank month by month.\nAll rates: one row per bank and product, with ranges and premiums, for filtering and pivot tables.`],
     ["Compared rate", "Loans: each bank's lowest rate for the product (1 = cheapest). Deposits: each bank's highest rate (1 = pays most)."],
     [`Vs ${R()} / ${R()} vs average`, `▲ green = ${R()} ahead (cheaper loan or higher deposit rate), ▼ red = ${R()} behind, in percentage points. = means level.`],
     ["Fixed vs variable", "Loan products with \"Fixed\" in the name are fixed rate; all others variable. Special offer rates are used where listed."],
@@ -1561,6 +1711,9 @@ document.addEventListener("click", (e) => {
   }
   if (t.dataset.fsec) { state.finSection = t.dataset.fsec; return renderFinancials(); }
   if (t.dataset.lview) { state.finLoanView = t.dataset.lview; return renderFinancials(); }
+  if (t.dataset.mxmode) { state.mxMode = t.dataset.mxmode; return renderFinancials(); }
+  if (t.dataset.mxgroup) { state.mxGroup = t.dataset.mxgroup; return renderFinancials(); }
+  if (t.dataset.mxorder) { state.mxOrder = t.dataset.mxorder; return renderFinancials(); }
   if (t.dataset.rankby) { state.finRankBy = t.dataset.rankby; return renderFinancials(); }
   if (t.dataset.bdsort) { state.finBdSort = { ...(state.finBdSort || {}), [t.dataset.kind]: t.dataset.bdsort }; return renderFinancials(); }
   if (t.dataset.bsort) {
