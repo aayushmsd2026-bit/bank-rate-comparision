@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nepal Bank Rates</title>
-  <meta name="description" content="Compare base, loan and deposit rates across Nepal's commercial banks, against any bank you choose.">
+  <meta name="description" content="Compare base, loan and deposit rates and monthly NRB financials across Nepal's commercial banks, against any bank you choose.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%233451B2'/><path d='M9 22v-6m7 6V10m7 12v-9' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611050715">
+  <link rel="stylesheet" href="style.css?v=202611070843">
 </head>
 <body>
   <header class="nav">
@@ -25,6 +25,7 @@
         <button role="tab" data-tab="deposit" aria-selected="false">Deposits</button>
         <button role="tab" data-tab="loan" aria-selected="false">Lending</button>
         <button role="tab" data-tab="banks" aria-selected="false">Banks</button>
+        <button role="tab" data-tab="fin" aria-selected="false">Financials</button>
       </nav>
       <div class="nav-status">
         <span id="source-badge" class="pill">Loading…</span>
@@ -192,6 +193,43 @@
         <span>NPL = non-performing (bad) loans as a share of total loans</span>
       </p>
     </section>
+    <!-- Financials (NRB monthly) -->
+    <section id="tab-fin" class="panel" hidden>
+      <div class="head">
+        <div>
+          <h1>Bank financials</h1>
+          <p class="sub" id="fin-source">Loading Nepal Rastra Bank figures…</p>
+        </div>
+        <div class="controls">
+          <select id="fin-month" aria-label="Month"></select>
+          <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
+        </div>
+      </div>
+      <div id="fin-body">
+        <div id="fin-kpis" class="kpis"></div>
+
+        <article class="card trend-card">
+          <header class="card-head chart-head">
+            <div><h2>Trend over time</h2><p id="fin-trend-note"></p></div>
+            <div class="controls">
+              <label class="lbl">Measure <select id="fin-trend-metric"></select></label>
+              <label class="lbl">Also show <select id="fin-trend-vs"></select></label>
+            </div>
+          </header>
+          <div id="fin-trend" class="trend-wrap"></div>
+          <p id="fin-trend-legend" class="legend trend-legend"></p>
+        </article>
+
+        <div class="toolbar"><div class="toggle wide" id="fin-groups" role="group" aria-label="Measures shown"></div></div>
+        <div class="sheet fin-sheet"><table id="fin-table" class="list banks fin"></table></div>
+        <p class="legend">
+          <span>Click a column heading to rank banks on it (click again for worst first)</span>
+          <span><span class="rk t1">#1</span> rank: green top third · grey middle · red bottom third</span>
+          <span>Under each figure: the gap to <span class="ref-label"></span></span>
+          <span>Figures follow NRB's regulatory reporting, so they differ slightly from banks' published accounts. "Approx." rates are estimated from interest paid and earned</span>
+        </p>
+      </div>
+    </section>
   </main>
 
   <footer class="foot">
@@ -207,6 +245,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202611050715"></script>
+  <script src="app.js?v=202611070843"></script>
 </body>
 </html>

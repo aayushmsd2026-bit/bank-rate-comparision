@@ -264,6 +264,47 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .key-sw.high { background: rgba(217,154,6,.55); }
 .banks .b-vs { text-align: right; }
 
+/* ---------- financials (NRB) ---------- */
+.toggle.wide { flex-wrap: wrap; }
+#fin-kpis .k-value { font-size: 1.9rem; }
+#fin-kpis .k-value small, .fin .val small { font-size: .55em; opacity: .75; font-weight: 600; }
+.k-sub { font-weight: 500; color: var(--faint); }
+.kpi.featured .k-sub { color: rgba(255,255,255,.75); }
+.lbl { display: inline-flex; align-items: center; gap: 8px; font-size: .82rem; font-weight: 600; color: var(--muted); }
+.lbl select { max-width: 260px; }
+.chart-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.trend-card { margin-bottom: 18px; }
+.trend-wrap { padding: 4px 18px 0; }
+.trend { width: 100%; height: auto; display: block; }
+.trend .grid-l { stroke: var(--hair-soft); stroke-width: 1; }
+.trend .ax { font-size: 11px; fill: var(--faint); }
+.trend .ax.yr { font-weight: 700; fill: var(--muted); }
+.trend .gap { fill: var(--hair-soft); opacity: .7; }
+.trend .line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.trend .pt { stroke: #fff; stroke-width: 1.5; }
+.trend .s-ref { stroke: var(--brand); } .trend .pt.s-ref { fill: var(--brand); }
+.trend .s-avg { stroke: var(--faint); stroke-dasharray: 5 4; } .trend .pt.s-avg { fill: var(--faint); stroke-dasharray: none; }
+.trend .s-vs { stroke: #D97706; } .trend .pt.s-vs { fill: #D97706; }
+.trend-legend { padding: 0 22px 16px; margin-top: 4px; }
+.sw { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; }
+.sw.s-ref { background: var(--brand); } .sw.s-avg { background: repeating-linear-gradient(90deg, var(--faint) 0 5px, transparent 5px 9px); } .sw.s-vs { background: #D97706; }
+.sw.gapk { height: 12px; width: 10px; background: var(--hair-soft); }
+.fin-sheet { max-height: 72vh; overflow: auto; }
+.fin thead th { position: sticky; top: 0; z-index: 3; background: var(--surface); }
+.fin .rank-col { position: sticky; left: 0; z-index: 2; background: var(--surface); width: 36px; min-width: 36px; color: var(--faint); font-weight: 700; text-align: right; padding-right: 4px; }
+.fin .bank-col { position: sticky; left: 36px; z-index: 2; background: var(--surface); min-width: 190px; white-space: nowrap; box-shadow: 4px 0 8px -6px rgba(15,23,42,.25); }
+.fin thead .bank-col, .fin thead .rank-col { z-index: 5; }
+.fin td.bank-col b { display: block; font-size: .92rem; }
+.fin .bank-full { display: block; font-size: .74rem; color: var(--muted); font-weight: 500; }
+.fin tr.ref-row td { position: sticky; top: var(--fin-head-h, 92px); z-index: 2; background: var(--brand-tint); border-bottom: 2px solid var(--brand-tint-2); }
+.fin tr.ref-row .bank-col, .fin tr.ref-row .rank-col { z-index: 4; background: var(--brand-tint); }
+.fin tr.ref-row .bank-full { color: var(--brand-ink); }
+.cell-top { display: flex; justify-content: flex-end; align-items: baseline; gap: 4px; }
+.rk { display: inline-block; font-size: .64rem; font-weight: 700; padding: 1px 5px; border-radius: 5px; margin-left: 4px; vertical-align: 1px; }
+.rk.t1 { background: var(--good-bg); color: var(--good); }
+.rk.t2 { background: var(--hair-soft); color: var(--muted); }
+.rk.t3 { background: var(--bad-bg); color: var(--bad); }
+
 /* ---------- footer ---------- */
 .foot { background: var(--ink); color: rgba(255,255,255,.7); font-size: .8rem; }
 .foot-inner { display: flex; gap: 28px; align-items: flex-start; padding: 26px var(--gutter); }
@@ -277,6 +318,10 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .cards2 { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
+  .fin .bank-col { min-width: 120px; }
+  .trend-wrap { padding: 4px 6px 0; }
+  .lbl { width: 100%; }
+  .lbl select { flex: 1; max-width: none; }
   .kpis.kpis-2, .kpis.kpis-3 { grid-template-columns: 1fr; }
   .kpis-2 .kpi { display: block; }
   .cards2 .card { overflow-x: auto; }

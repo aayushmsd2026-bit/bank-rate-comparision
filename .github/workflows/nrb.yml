@@ -1,0 +1,39 @@
+name: Sync NRB bank financials
+
+# Checks Nepal Rastra Bank's monthly "Banking & Financial Statistics" every day and
+# publishes any new month to data/nrb/financials.json once it passes the checks in
+# scripts/nrb_sync.py. If the newest month can't be read or fails a check, the run
+# fails (GitHub emails the repository owner) and nothing is published.
+on:
+  schedule:
+    - cron: "41 3 * * *"   # 03:41 UTC, about 09:26 in Nepal
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nrb-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openpyxl==3.1.5
+      - run: python scripts/nrb_sync.py --months 24
+      - name: Commit if new months were added
+        if: always()
+        run: |
+          if git diff --quiet -- data/nrb/financials.json; then echo "No change"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898388+github-actions[bot]@users.noreply.github.com"
+          git add data/nrb/financials.json
+          git commit -m "Update NRB bank financials"
+          git pull --rebase origin main
+          git push
