@@ -22,6 +22,20 @@ const $ = (id) => document.getElementById(id);
 
 // ---------- loading ----------
 
+// Colour scales from the site's Japanese palette. Solid colours only: pinned (sticky) cells
+// must be opaque or the cells scrolling beneath them show through.
+const RAMP_AI = [[0, [246, 249, 249]], [0.35, [205, 227, 235]], [0.7, [104, 158, 186]], [0.88, [22, 94, 131]], [1, [27, 45, 79]]];   // kinari → kamenozoki → ai → kon
+const RAMP_ODO = [[0, [251, 248, 240]], [0.5, [236, 210, 150]], [1, [176, 124, 40]]];   // kinari → 黄土 ōdo, the "higher" side of diverging scales
+function rampHex(ramp, t) {
+  t = Math.max(0, Math.min(1, t));
+  const i = ramp.findIndex(([p]) => p >= t);
+  const [p1, c1] = ramp[Math.max(0, i - 1)], [p2, c2] = ramp[i];
+  const k = p2 === p1 ? 0 : (t - p1) / (p2 - p1);
+  return "#" + c1.map((v, j) => Math.round(v + (c2[j] - v) * k).toString(16).padStart(2, "0")).join("");
+}
+// background + readable text colour for a 0..1 intensity
+const heatStyle = (t, ramp = RAMP_AI) => `background:${rampHex(ramp, t)};${t > 0.62 ? "color:#fff;" : ""}`;
+
 // Short label (NEPSE symbol) and full name of the comparison bank, for display.
 // Bank names are plain text (letters, spaces, dots, apostrophes), safe in HTML and Excel alike.
 const R = () => SCRIP[REF] || REF;
@@ -601,11 +615,8 @@ function renderBaseTab() {
 
   // Matrix: cell = row bank's base rate − column bank's base rate.
   const maxAbs = Math.max(...vals) - Math.min(...vals) || 1;
-  const shade = (d) => {
-    if (Math.abs(d) < 0.005) return "";
-    const a = (0.12 + 0.6 * Math.min(1, Math.abs(d) / maxAbs)).toFixed(2);
-    return d < 0 ? `background: rgba(52,81,178,${a})` : `background: rgba(217,154,6,${a})`;
-  };
+  // diverging: ai (indigo) where the row bank is lower, ōdo (ochre) where it is higher
+  const shade = (d) => (Math.abs(d) < 0.005 ? "" : heatStyle(0.15 + 0.7 * Math.min(1, Math.abs(d) / maxAbs), d < 0 ? RAMP_AI : RAMP_ODO));
   let head = `<thead><tr><th class="mx-corner">Row − column<br><span>(pp)</span></th>`;
   for (const c of list) head += `<th class="${c.code === REF ? "me" : ""}" title="${esc(c.name)} · ${pct(c.v)}"><div>${esc(scripOf(c.code))}</div><span>${pct(c.v)}</span></th>`;
   head += `</tr></thead>`;
@@ -1052,8 +1063,7 @@ function mxRank(row, code, mode) {
 function mxShade(rk) {
   if (!rk || rk.n < 2) return "";
   const t = 1 - (rk.r - 1) / (rk.n - 1);   // 1 = best in row
-  const a = (0.06 + 0.62 * t * t).toFixed(2);
-  return `background: rgba(52,81,178,${a});${t * t > 0.55 ? "color:#fff;" : ""}`;
+  return heatStyle(0.05 + 0.95 * t * t);
 }
 
 function renderFinMatrix(m) {
@@ -1113,7 +1123,7 @@ function renderFinMatrix(m) {
       <label class="lbl">Rows ${tog("mxgroup", MX_GROUPS, group)}</label>
       <label class="lbl">Bank order ${tog("mxorder", [["loans", "By loans"], ["deposits", "By deposits"], ["az", "A–Z"]], order)}</label>
     </div>
-    <div class="mx-wrap"><table class="mx2">${head}<tbody>${body}</tbody></table></div>
+    <div class="mx2-wrap"><table class="mx2">${head}<tbody>${body}</tbody></table></div>
     <p class="legend mx-legend"><span>Profitability rows always show their own measure (switch to <b>Rank</b> to rank them)</span><span>* market median</span><span>Amounts in Rs arba (billion)</span></p>`;
 }
 
@@ -1160,9 +1170,10 @@ function fitGrids() {
 // numbers, so filters, sorting and pivots work. Gap format: ▲ green = the reference bank ahead,
 // ▼ red = the reference bank behind, matching the website.
 const XL = {
-  brand: "FF3451B2", brandInk: "FF2A4196", tint: "FFEEF2FC", ink: "FF1E242A", muted: "FF64748B",
-  good: "FF15803D", goodBg: "FFE7F6EC", bad: "FFC81E1E", badBg: "FFFDECEC", band: "FFF8FAFC",
-  hair: "FFE2E8F0", gold: "FFA16207", white: "FFFFFFFF",
+  // same Japanese palette as the site: ai, kon, kamenozoki, sumi, nibi, tokiwa, enji, kinari, shironezumi, yamabuki
+  brand: "FF165E83", brandInk: "FF1B2D4F", tint: "FFEAF3F6", ink: "FF2B2B2B", muted: "FF6E6E6B",
+  good: "FF1E7A4C", goodBg: "FFE5F2EA", bad: "FFB03A48", badBg: "FFF8E6E8", band: "FFFBFAF5",
+  hair: "FFDCDDDD", gold: "FFC68C00", white: "FFFFFFFF",
 };
 const PCT = "0.00%";
 const PP = '+0.00" pp";-0.00" pp";0.00" pp"';
@@ -1407,8 +1418,7 @@ function addBaseSheet(wb) {
   const maxAbs = (s.max - s.min) || 1;
   const tint = (d) => {
     const t = Math.min(1, Math.abs(d) / maxAbs);
-    const mix = (a, b) => Math.round(a + (b - a) * (0.15 + 0.6 * t)).toString(16).padStart(2, "0");
-    return d < 0 ? `FF${mix(255, 52)}${mix(255, 81)}${mix(255, 178)}` : `FF${mix(255, 217)}${mix(255, 154)}${mix(255, 6)}`;
+    return "FF" + rampHex(d < 0 ? RAMP_AI : RAMP_ODO, 0.15 + 0.7 * t).slice(1).toUpperCase();
   };
   list.forEach((r, i) => {
     const x = ws.getRow(M + 1 + i);
@@ -1536,8 +1546,9 @@ function addFinancialSheets(wb) {
         const cell = x.getCell(3 + j); cell.numFmt = nf;
         const f = row.cells[c]; if (!f) return;
         const t = 1 - (f.rank - 1) / Math.max(1, f.n - 1);
-        if (t * t > 0.04) cell.fill = fill("FF" + [52, 81, 178].map((v) => Math.round(255 - (255 - v) * (0.06 + 0.62 * t * t))).map((v) => v.toString(16).padStart(2, "0")).join("").toUpperCase());
-        if (t * t > 0.55) cell.font = { size: 10, color: { argb: XL.white }, bold: c === REF };
+        const h = 0.05 + 0.95 * t * t;
+        if (h > 0.08) cell.fill = fill("FF" + rampHex(RAMP_AI, h).slice(1).toUpperCase());
+        if (h > 0.62) cell.font = { size: 10, color: { argb: XL.white }, bold: c === REF };
         else if (c === REF) cell.font = { size: 10, bold: true, color: { argb: XL.brandInk } };
       });
       if (row.total) { x.getCell(2).font = { bold: true, size: 10, color: { argb: XL.ink } }; }

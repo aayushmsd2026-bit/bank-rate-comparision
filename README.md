@@ -38,6 +38,24 @@ To run it by hand: `pip install openpyxl==3.1.5 && python scripts/nrb_sync.py --
 
 Notes: figures follow NRB's regulatory reporting, so they differ slightly from banks' published (NFRS) accounts. Per-bank NPL and capital adequacy aren't in this release (only industry totals). Rates marked "approx." (cost of deposits, loan yield, spread, returns) are estimated from year-to-date interest and profit, annualised by 12 ÷ months elapsed in the fiscal year.
 
+## Colours
+
+The palette is built from traditional Japanese colours (the tradition catalogued in Sanzo Wada's *A Dictionary of Color Combinations*), and each colour has one job:
+
+| Role | Colour | Hex |
+|---|---|---|
+| Page background | Kinari 生成り | `#FBFAF5` |
+| Text | Sumi 墨 / Nibi 鈍色 | `#2B2B2B` / `#6E6E6B` |
+| Comparison bank, links, controls | Ai 藍 | `#165E83` |
+| Depth (featured card, footer) | Kon 紺 | `#1B2D4F` |
+| Call to action, accent rule | Shu 朱 | `#D9541E` |
+| Ahead / better | Tokiwa 常磐 | `#1E7A4C` |
+| Behind / worse | Enji 臙脂 | `#B03A48` |
+| Best in market | Yamabuki 山吹 | `#C68C00` |
+| Lines, tints | Shironezumi 白鼠, Kamenozoki 瓶覗 | `#DCDDDD`, `#EAF3F6` |
+
+Heat maps use one ordered scale (kinari → kamenozoki → ai → kon), so darker always means more; the base-rate matrix diverges to ōdo 黄土 (ochre) for "higher". All shades are solid colours, so pinned columns stay readable when the table scrolls beneath them. Up/down gaps always carry ▲/▼ as well as colour. The Excel export uses the same palette.
+
 ## Rules used
 
 - **Commercial banks** = institutions BankByaj lists as Class A.
