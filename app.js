@@ -5,7 +5,8 @@
 
 const API = "https://admin.bankbyaj.com/api/v1/";
 let REF = null;                   // reference bank (BankByaj institute_code), chosen with the "Compare against" selector
-const AUTO_REFRESH_MS = 15 * 60 * 1000;
+// Rates change a few times a month; refresh while the page stays open, but only redraw on a real change.
+const AUTO_REFRESH_MS = 30 * 60 * 1000;
 
 // NEPSE share symbols, keyed by BankByaj institute_code. Rastriya Banijya Bank
 // is not listed on NEPSE, so it keeps its usual short name.
@@ -86,26 +87,44 @@ async function loadLive() {
 let ratesReady;
 state.ratesReady = new Promise((resolve) => (ratesReady = resolve));
 
+// The hourly backup copy is drawn at once on the first visit (one small file), then replaced by
+// live BankByaj data, which takes several seconds and dozens of requests.
 async function load() {
-  setBadge("Updating…", "");
   $("error").hidden = true;
-  try {
-    state.data = await loadLive();
-    state.source = "live";
-  } catch (liveErr) {
-    try {
-      state.data = await getJson("data/snapshot.json?t=" + Date.now());
-      state.source = "snapshot";
-    } catch (snapErr) {
-      $("error").textContent = `Could not load rates (live: ${liveErr.message}; backup: ${snapErr.message}).`;
-      $("error").hidden = false;
-      setBadge("Unavailable", "snap");
-      return;
-    }
+  if (!state.data) {
+    try { applyData(await getJson("data/snapshot.json?t=" + Date.now()), "snapshot"); } catch { /* live data below */ }
   }
+  setBadge("Updating…", "");
+  try {
+    applyData(await loadLive(), "live");
+  } catch (liveErr) {
+    if (state.data) return renderStatus();
+    $("error").textContent = `Could not load rates (${liveErr.message}).`;
+    $("error").hidden = false;
+    setBadge("Unavailable", "snap");
+  }
+}
+
+// Redraw only when the rates themselves changed, and keep every table's scroll position.
+function applyData(d, source) {
+  const fp = JSON.stringify([d.baseRates, d.categories, d.updates]);
+  state.data = d;
+  state.source = source;
+  if (fp === state.fp) return renderStatus();
+  state.fp = fp;
   prepare();
-  render();
+  keepScroll(render);
   ratesReady();
+}
+
+function keepScroll(fn) {
+  const sel = ".grid-wrap, .mx2-wrap, .bd-wrap, .sheet, .mx-wrap";
+  const key = (el) => `${el.closest("[id]")?.id}|${el.className}`;
+  const saved = new Map([...document.querySelectorAll(sel)].map((el) => [key(el), [el.scrollTop, el.scrollLeft]]));
+  const y = window.scrollY;
+  fn();
+  document.querySelectorAll(sel).forEach((el) => { const v = saved.get(key(el)); if (v) [el.scrollTop, el.scrollLeft] = v; });
+  window.scrollTo(0, y);
 }
 
 function setBadge(text, cls) {
@@ -376,14 +395,20 @@ function renderRefSelect() {
   document.querySelectorAll(".ref-full").forEach((el) => (el.textContent = RN()));
 }
 
+function renderStatus() {
+  const m = state.model;
+  if (!m) return;
+  setBadge(state.source === "live" ? "Live" : "Backup copy", state.source === "live" ? "live" : "snap");
+  const stamp = state.source === "live" ? `Live · fetched ${fmtDate(state.data.fetched_at)}` : `Backup copy from ${fmtDate(state.data.fetched_at)}`;
+  document.querySelectorAll(".stamp").forEach((el) => (el.textContent = `${stamp}${m.modified ? ` · BankByaj updated ${fmtDate(m.modified)}` : ""}`));
+}
+
 function render() {
   const m = state.model;
   pickRef();
   renderRefSelect();
   document.querySelectorAll(".bank-count").forEach((el) => (el.textContent = m.banks.length));
-  setBadge(state.source === "live" ? "Live" : "Backup copy", state.source === "live" ? "live" : "snap");
-  const stamp = state.source === "live" ? `Live · fetched ${fmtDate(state.data.fetched_at)}` : `Backup copy from ${fmtDate(state.data.fetched_at)}`;
-  document.querySelectorAll(".stamp").forEach((el) => (el.textContent = `${stamp}${m.modified ? ` · BankByaj updated ${fmtDate(m.modified)}` : ""}`));
+  renderStatus();
 
   state.rows = buildRows();
   renderKpis();
@@ -835,7 +860,6 @@ function rankChip(rank, n) {
   const t = rank <= n / 3 ? "t1" : rank > (2 * n) / 3 ? "t3" : "t2";
   return `<span class="rk ${t}" title="Rank ${rank} of ${n}">#${rank}</span>`;
 }
-const rankText = (rank, n) => (rank ? `<b>#${rank}</b> of ${n}` : "—");
 
 async function loadFinancials() {
   try {
@@ -1144,7 +1168,7 @@ function renderOverviewFinancials() {
   const byRank = [...products].sort((a, b) => a.f.rank - b.f.rank);
   const li = (x) => `<li><span>${esc(x.it.label)}</span><b>#${x.f.rank}</b><span class="dim">${fmtArba(x.f.amt)} · ${fmtPct(x.f.share, 2)} share</span></li>`;
   box.innerHTML = `<div class="section-title"><h2>Financial position · ${esc(m.bs)}</h2>
-      <p>From Nepal Rastra Bank's monthly statistics (${esc(m.label)}) · <button type="button" class="linkish" data-tab="fin">Open Financials →</button></p></div>
+      <p>Balance-sheet figures from Nepal Rastra Bank's monthly statistics (${esc(m.label)}) · <button type="button" class="linkish" data-tab="fin">Open Bank financials →</button></p></div>
     <div class="kpis fin-kpis">${line(I("deposits"))}${line(I("dep_current"))}${line(I("dep_savings"))}${line(I("loans"))}
       ${s ? `<div class="kpi"><div class="k-label">Net profit <span class="k-sub">(year to date)</span></div><div class="k-value">${fmtArba(s.ref)}</div><div class="k-facts"><span>Rank <b>#${s.rank}</b> of ${s.n}</span>${pg && pg.ref !== null ? `<span><b>${fmtSigned(pg.ref)}</b> vs a year earlier</span>` : ""}</div></div>` : ""}</div>
     <div class="ov-loans">
@@ -1700,7 +1724,7 @@ function showTab(tab) {
   state.tab = tab;
   document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "tab-" + tab));
-  history.replaceState(null, "", location.search + "#" + tab);
+  history.replaceState(null, "", location.search + "#" + tab + (tab === "fin" && state.finSection ? "/" + state.finSection : ""));
   fitGrids();
 }
 
@@ -1720,7 +1744,7 @@ document.addEventListener("click", (e) => {
     t.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
     return renderGrid(section);
   }
-  if (t.dataset.fsec) { state.finSection = t.dataset.fsec; return renderFinancials(); }
+  if (t.dataset.fsec) { state.finSection = t.dataset.fsec; history.replaceState(null, "", location.search + "#fin/" + state.finSection); return renderFinancials(); }
   if (t.dataset.lview) { state.finLoanView = t.dataset.lview; return renderFinancials(); }
   if (t.dataset.mxmode) { state.mxMode = t.dataset.mxmode; return renderFinancials(); }
   if (t.dataset.mxgroup) { state.mxGroup = t.dataset.mxgroup; return renderFinancials(); }
@@ -1752,8 +1776,16 @@ window.addEventListener("resize", fitGrids);
 
 state.order = "az";
 state.show = { loan: "premium", deposit: "range" };
-const initial = location.hash.slice(1);
+// links can open a tab, or a Financials section: #fin/loan, #fin/matrix …
+const [initial, initialSection] = location.hash.slice(1).split("/");
+if (initial === "fin" && ["deposit", "loan", "profit", "matrix"].includes(initialSection)) state.finSection = initialSection;
 if (["summary", "loan", "deposit", "base", "banks", "fin"].includes(initial)) showTab(initial);
 load();
 loadFinancials();
 setInterval(() => { if (!document.hidden) load(); }, AUTO_REFRESH_MS);
+// coming back to a tab left open for a while: refresh once
+let hiddenAt = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) hiddenAt = Date.now();
+  else if (hiddenAt && Date.now() - hiddenAt > AUTO_REFRESH_MS) load();
+});

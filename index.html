@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611071503">
+  <link rel="stylesheet" href="style.css?v=202611071516">
 </head>
 <body>
   <header class="nav">
@@ -22,10 +22,10 @@
       <nav class="tabs" role="tablist" aria-label="Sections">
         <button role="tab" data-tab="summary" aria-selected="true">Overview</button>
         <button role="tab" data-tab="base" aria-selected="false">Base rate</button>
-        <button role="tab" data-tab="deposit" aria-selected="false">Deposits</button>
-        <button role="tab" data-tab="loan" aria-selected="false">Lending</button>
+        <button role="tab" data-tab="deposit" aria-selected="false">Deposit rates</button>
+        <button role="tab" data-tab="loan" aria-selected="false">Lending rates</button>
         <button role="tab" data-tab="banks" aria-selected="false">Banks</button>
-        <button role="tab" data-tab="fin" aria-selected="false">Financials</button>
+        <button role="tab" data-tab="fin" aria-selected="false">Bank financials</button>
       </nav>
       <div class="nav-status">
         <span id="source-badge" class="pill">Loading…</span>
@@ -58,16 +58,16 @@
       <div class="cards2">
         <article class="card">
           <header class="card-head">
-            <h2>Deposit scorecard</h2>
-            <p>Ranked by each bank's highest rate · 1 = pays most</p>
+            <h2>Deposit rate scorecard</h2>
+            <p>Live rates from bankbyaj.com · ranked by each bank's highest rate · 1 = pays most</p>
           </header>
           <table id="deposit-score" class="score"></table>
           <p id="deposit-missing" class="missing"></p>
         </article>
         <article class="card">
           <header class="card-head">
-            <h2>Lending scorecard</h2>
-            <p>Ranked by each bank's lowest rate · 1 = cheapest</p>
+            <h2>Lending rate scorecard</h2>
+            <p>Live rates from bankbyaj.com · ranked by each bank's lowest rate · 1 = cheapest</p>
           </header>
           <table id="loan-score" class="score"></table>
           <p id="loan-missing" class="missing"></p>
@@ -227,13 +227,13 @@
       <div>
         <p class="stamp"></p>
         <p><b>Nepal Bank Rates</b> is an independent project. It is not endorsed by any bank or by BankByaj. Figures are for information only; check them with the bank before relying on them.</p>
-        <p>Data:  <a href="https://bankbyaj.com" target="_blank" rel="noopener">bankbyaj.com</a>, read live on every visit with an hourly backup copy.
+        <p>Rates: <a href="https://bankbyaj.com" target="_blank" rel="noopener">bankbyaj.com</a>, read live on every visit with an hourly backup copy. Bank financials: <a href="https://www.nrb.org.np/category/monthly-statistics/?department=bfr" target="_blank" rel="noopener">Nepal Rastra Bank</a> monthly Banking &amp; Financial Statistics, updated automatically when NRB publishes.
           Commercial banks = Class A. Loans: products named "Fixed" are fixed rate, all others variable; offer rates used where listed.
           Fixed deposit tenures are read from product names (e.g. "3Mto&lt;6M", "&gt;1Yto2Y", "5Y&amp;above").</p>
       </div>
     </div>
   </footer>
 
-  <script src="app.js?v=202611071503"></script>
+  <script src="app.js?v=202611071516"></script>
 </body>
 </html>

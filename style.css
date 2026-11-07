@@ -14,7 +14,7 @@
   --ink: #2B2B2B;           /* 墨 sumi */
   --text: #34332F;
   --muted: #6E6E6B;         /* 鈍色 nibi */
-  --faint: #9A9993;
+  --faint: #807F79;         /* light enough to recede, dark enough to read (≈4:1) */
   --hair: #DCDDDD;          /* 白鼠 shironezumi */
   --hair-soft: #ECEBE6;
   --bg: #FBFAF5;            /* 生成り kinari */
@@ -311,7 +311,6 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .mixbar { display: inline-block; width: 60px; height: 6px; background: var(--hair-soft); border-radius: 3px; margin-right: 8px; vertical-align: middle; overflow: hidden; }
 .mixbar.wide { width: 90px; }
 .mixbar i { display: block; height: 100%; background: var(--brand); opacity: .55; border-radius: 3px; }
-.fin-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
 .rank-list { padding: 4px 22px 16px; }
 .rank-row { display: grid; grid-template-columns: 24px minmax(120px, 190px) 1fr auto; gap: 10px; align-items: center; padding: 6px 6px; border-bottom: 1px solid var(--hair-soft); font-size: .86rem; }
 .rank-row.me { background: var(--brand-tint); border-radius: 8px; }
@@ -378,12 +377,11 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 
 @media (max-width: 1180px) {
   .fin-kpis { grid-template-columns: repeat(3, 1fr); }
-  .fin-pair { grid-template-columns: 1fr; }
   .kpis { grid-template-columns: repeat(3, 1fr); }
   .cards2 { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
-  .fin-pair, .ov-loans { grid-template-columns: 1fr; }
+  .ov-loans { grid-template-columns: 1fr; }
   .fin-kpis { grid-template-columns: 1fr 1fr !important; }
   .rank-row { grid-template-columns: 20px 1fr auto; }
   .rr-bar { display: none; }
@@ -419,4 +417,18 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .grid tbody .c2 { box-shadow: 4px 0 8px -6px rgba(27,45,79,.22); }
   .grid thead th { min-width: 110px; }
   .foot-inner { flex-direction: column; gap: 12px; }
+}
+
+/* ---------- print: one clean page per view, no controls ---------- */
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  body { background: #fff; font-size: 10pt; }
+  .nav, .ref-bar, .btn-cta, .btn-ghost, .toolbar, .jump, .controls, .mx-controls, .fin-sections, .toggle, #updates, select { display: none !important; }
+  .panel[hidden] { display: none !important; }
+  .grid-wrap, .mx2-wrap, .sheet, .bd-wrap, .mx-wrap { height: auto !important; max-height: none !important; overflow: visible !important; }
+  .card, .kpi, .sheet, .grid-wrap { box-shadow: none !important; break-inside: avoid; }
+  .grid .pin, .mx2 .mx-item, .mx2 .mx-lead, .mx2 .mx-ref, thead th { position: static !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .foot { background: #fff; color: var(--muted); border-top: 1px solid var(--hair); }
+  .foot p.stamp, .foot a { color: var(--ink); }
 }
