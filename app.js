@@ -379,7 +379,7 @@ function render() {
   renderGrid("deposit");
   renderBaseTab();
   renderBanks();
-  if (state.fin) renderFinancials();
+  if (state.fin) { renderFinancials(); renderOverviewFinancials(); }
   renderUpdates();
   fitGrids();
 }
@@ -698,228 +698,328 @@ function renderBanks() {
 // "Banking & Financial Statistics". Amounts are Rs million; profit and loss items are
 // fiscal year to date, so rates built from them are annualised with 12 / fy_month.
 
-const pctOf = (a, b) => (a === undefined || b === undefined || !b ? null : (100 * a) / b);
+const pctOf = (a, b) => (a === undefined || a === null || b === undefined || !b ? null : (100 * a) / b);
 const ann = (x, m) => (x === undefined ? undefined : (x * 12) / m.fy_month);
 const sumOf = (m, k) => Object.values(m.banks).reduce((t, b) => t + (b[k] || 0), 0);
 const profitOf = (b) => (b.net_profit || 0) - (b.net_loss || 0);
-// same month a year earlier, if NRB published it
-const yearAgo = (m) => {
-  const [y, mo] = m.id.split("-").map(Number);
-  return state.fin.months.find((x) => x.id === `${y - 1}-${String(mo).padStart(2, "0")}`);
-};
-const growth = (m, code, f) => {
-  const p = yearAgo(m)?.banks[code], b = m.banks[code];
-  const a = p && f(p), c = b && f(b);
-  return a ? pctOf(c - a, Math.abs(a)) : null;
-};
+const monthById = (id) => state.fin.months.find((x) => x.id === id);
+const shiftId = (id, n) => { let [y, mo] = id.split("-").map(Number); mo += n; while (mo < 1) { mo += 12; y--; } while (mo > 12) { mo -= 12; y++; } return `${y}-${String(mo).padStart(2, "0")}`; };
+const yearAgo = (m) => monthById(shiftId(m.id, -12));
+const arba = (mn) => (mn === null || mn === undefined || !Number.isFinite(mn) ? null : mn / 1e3);
+const fmtArba = (mn) => { const v = arba(mn); return v === null ? "—" : `Rs ${Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(2)} arba`; };
+const fmtPct = (v, dp = 1) => (v === null || v === undefined || !Number.isFinite(v) ? "—" : `${v.toFixed(dp)}%`);
+const fmtSigned = (v, unit = "%", dp = 1) => (v === null || !Number.isFinite(v) ? "—" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(dp)}${unit}`);
+const bankName = (c) => state.model?.nameOf[c] || c;
 
-// unit: arba (Rs billion), pct, pp. better: ranking direction, null = shown but not ranked.
-const FIN_METRICS = [
-  { key: "deposits", label: "Deposits", unit: "arba", better: "high", groups: ["key", "size"], get: (b) => b.deposits / 1e3 },
-  { key: "deposit_share", label: "Deposit market share", unit: "pct", better: "high", groups: ["key", "size"], get: (b, m) => pctOf(b.deposits, sumOf(m, "deposits")) },
-  { key: "deposit_growth", label: "Deposit growth", note: "vs a year earlier", unit: "pct", better: "high", median: true, groups: ["size"], get: (b, m, c) => growth(m, c, (x) => x.deposits) },
-  { key: "loans", label: "Loans", unit: "arba", better: "high", groups: ["key", "size"], get: (b) => b.loans / 1e3 },
-  { key: "loan_share", label: "Loan market share", unit: "pct", better: "high", groups: ["size"], get: (b, m) => pctOf(b.loans, sumOf(m, "loans")) },
-  { key: "loan_growth", label: "Loan growth", note: "vs a year earlier", unit: "pct", better: "high", median: true, groups: ["size"], get: (b, m, c) => growth(m, c, (x) => x.loans) },
-  { key: "total_assets", label: "Total assets", unit: "arba", better: "high", groups: ["size"], get: (b) => b.total_assets / 1e3 },
-  { key: "capital_fund", label: "Capital fund", unit: "arba", better: "high", groups: ["size"], get: (b) => b.capital_fund / 1e3 },
-  { key: "casa", label: "Current + savings share", note: "low-cost deposits", unit: "pct", better: "high", groups: ["key", "mix"], get: (b) => pctOf((b.dep_current || 0) + (b.dep_savings || 0), b.deposits) },
-  { key: "fixed_share", label: "Fixed deposit share", unit: "pct", better: null, groups: ["mix"], get: (b) => pctOf(b.dep_fixed, b.deposits) },
-  { key: "call_share", label: "Call deposit share", unit: "pct", better: null, groups: ["mix"], get: (b) => pctOf(b.dep_call, b.deposits) },
-  { key: "net_profit", label: "Net profit", note: "year to date", unit: "arba", better: "high", groups: ["key", "profit"], get: (b) => profitOf(b) / 1e3 },
-  { key: "profit_growth", label: "Profit growth", note: "vs a year earlier", unit: "pct", better: "high", median: true, groups: ["key", "profit"], get: (b, m, c) => growth(m, c, profitOf) },
-  { key: "nii", label: "Net interest income", note: "year to date", unit: "arba", better: "high", groups: ["profit"], get: (b) => (b.interest_income - b.interest_expense) / 1e3 },
-  { key: "fee_income", label: "Fee & commission income", note: "year to date", unit: "arba", better: "high", groups: ["profit"], get: (b) => (b.commission_income || 0) / 1e3 },
-  { key: "cost_income", label: "Cost to income", note: "staff + office costs", unit: "pct", better: "low", groups: ["key", "profit"],
-    get: (b) => pctOf((b.staff_expense || 0) + (b.office_expense || 0), b.interest_income - b.interest_expense + (b.commission_income || 0) + (b.fx_income || 0) + (b.other_op_income || 0)) },
-  { key: "roa", label: "Return on assets", note: "annualised", unit: "pct", better: "high", groups: ["profit"], get: (b, m) => pctOf(ann(profitOf(b), m), b.total_assets) },
-  { key: "roe", label: "Return on capital", note: "annualised, on capital fund", unit: "pct", better: "high", groups: ["profit"], get: (b, m) => pctOf(ann(profitOf(b), m), b.capital_fund) },
-  { key: "cost_of_deposits", label: "Cost of deposits", note: "annualised, approx.", unit: "pct", better: "low", groups: ["key", "pricing"], get: (b, m) => pctOf(ann(b.interest_exp_deposits, m), b.deposits) },
-  { key: "yield_on_loans", label: "Yield on loans", note: "annualised, approx.", unit: "pct", better: null, groups: ["pricing"], get: (b, m) => pctOf(ann(b.interest_inc_loans, m), b.loans) },
-  { key: "spread", label: "Spread", note: "loan yield − deposit cost", unit: "pp", better: "high", groups: ["pricing"],
-    get: (b, m) => { const y = pctOf(ann(b.interest_inc_loans, m), b.loans), c = pctOf(ann(b.interest_exp_deposits, m), b.deposits); return y === null || c === null ? null : y - c; } },
-  { key: "cd_ratio", label: "Loans ÷ deposits", unit: "pct", better: null, groups: ["key", "pricing"], get: (b) => pctOf(b.loans, b.deposits) },
-  { key: "liquidity", label: "Liquid funds + securities", note: "% of deposits", unit: "pct", better: null, groups: ["pricing"], get: (b) => pctOf((b.liquid_funds || 0) + (b.investments || 0), b.deposits) },
-  { key: "provision_cover", label: "Loan-loss provisions", note: "% of loans", unit: "pct", better: null, groups: ["book"], get: (b) => pctOf(b.loan_loss_provision, b.loans) },
-  { key: "home_share", label: "Home loans", note: "% of loans", unit: "pct", better: null, groups: ["book"], get: (b) => pctOf(b.prod_home, b.loans) },
-  { key: "hp_share", label: "Hire purchase", note: "% of loans", unit: "pct", better: null, groups: ["book"], get: (b) => pctOf(b.prod_hire_purchase, b.loans) },
-  { key: "margin_share", label: "Margin loans", note: "% of loans", unit: "pct", better: null, groups: ["book"], get: (b) => pctOf(b.prod_margin, b.loans) },
-  { key: "deprived_share", label: "Deprived sector", note: "% of loans", unit: "pct", better: null, groups: ["book"], get: (b) => pctOf(b.prod_deprived, b.loans) },
-  { key: "energy_share", label: "Energy sector", note: "% of loans", unit: "pct", better: null, groups: ["book"], get: (b) => pctOf(b.sec_energy, b.loans) },
-  { key: "trade_share", label: "Wholesale & retail", note: "% of loans", unit: "pct", better: null, groups: ["book"], get: (b) => pctOf(b.sec_trade, b.loans) },
-  { key: "consumption_share", label: "Consumption loans", note: "% of loans", unit: "pct", better: null, groups: ["book"], get: (b) => pctOf(b.sec_consumption, b.loans) },
-  { key: "agri_share", label: "Agriculture", note: "% of loans", unit: "pct", better: null, groups: ["book"], get: (b) => pctOf(b.sec_agriculture, b.loans) },
-];
-const FIN_GROUPS = [["key", "Key figures"], ["size", "Size & share"], ["mix", "Deposit mix"], ["profit", "Profitability"], ["pricing", "Pricing & liquidity"], ["book", "Loan book"], ["all", "All"]];
+// Line items a bank's deposits or loans break into. Stored as Rs million per bank.
+const FIN_ITEMS = {
+  deposit: { base: "deposits", baseLabel: "deposits", items: [
+    { key: "dep_current", label: "Current deposits" },
+    { key: "dep_savings", label: "Savings deposits" },
+    { key: "dep_fixed", label: "Fixed deposits" },
+    { key: "dep_call", label: "Call deposits" },
+    { key: "dep_others", label: "Other deposits" },
+  ] },
+  product: { base: "loans", baseLabel: "loans", items: [
+    { key: "prod_term", label: "Term loans" },
+    { key: "prod_working_capital", label: "Short-term working capital / demand loans" },
+    { key: "prod_cash_credit", label: "Cash credit" },
+    { key: "prod_home", label: "Home loans (personal residential)" },
+    { key: "prod_deprived", label: "Deprived sector loans" },
+    { key: "prod_trust_receipt", label: "Trust receipt / import loans" },
+    { key: "prod_hire_purchase", label: "Hire purchase" },
+    { key: "prod_real_estate", label: "Real estate loans" },
+    { key: "prod_margin", label: "Margin lending" },
+    { key: "prod_overdraft", label: "Overdraft" },
+    { key: "prod_bills", label: "Bills purchased" },
+    { key: "prod_other", label: "Other products" },
+    { key: "credit_card", label: "Credit card lending", memo: true },
+  ] },
+  sector: { base: "loans", baseLabel: "loans", items: [
+    { key: "sec_trade", label: "Wholesale & retail trade" },
+    { key: "sec_consumption", label: "Consumption" },
+    { key: "sec_production", label: "Production (agro, beverage & non-food manufacturing)" },
+    { key: "sec_energy", label: "Electricity, gas & water" },
+    { key: "sec_finance", label: "Finance, insurance & real estate" },
+    { key: "sec_agriculture", label: "Agriculture & forestry" },
+    { key: "sec_tourism", label: "Tourism" },
+    { key: "sec_services", label: "Other services" },
+    { key: "sec_construction", label: "Construction" },
+    { key: "sec_transport", label: "Transport, communication & utilities" },
+    { key: "sec_metal", label: "Metal products & machinery" },
+    { key: "sec_mining", label: "Mining" },
+    { key: "sec_fishery", label: "Fishery" },
+    { key: "sec_local_govt", label: "Local government" },
+    { key: "sec_others", label: "Others" },
+  ] },
+};
+const FIN_TOTALS = { deposit: { key: "deposits", label: "Total deposits" }, product: { key: "loans", label: "Total loans" }, sector: { key: "loans", label: "Total loans" } };
+const allItems = () => Object.entries(FIN_ITEMS).flatMap(([kind, g]) => g.items.map((it) => ({ ...it, kind, base: g.base, baseLabel: g.baseLabel })));
+const itemByKey = (k) => allItems().find((it) => it.key === k) || (k === "deposits" ? { key: "deposits", label: "Total deposits", kind: "deposit", base: "deposits", total: true } : k === "loans" ? { key: "loans", label: "Total loans", kind: "product", base: "loans", total: true } : null);
 
-async function loadFinancials() {
-  try {
-    state.fin = await getJson("data/nrb/financials.json?t=" + Date.now());
-    state.finMonth ||= state.fin.months.at(-1)?.id;
-    if (state.model) renderFinancials();
-  } catch (err) {
-    $("fin-body").innerHTML = `<p class="notice">Could not load the NRB figures (${esc(err.message)}).</p>`;
-  }
+// Figures for one line item at one bank in one month.
+function itemFacts(m, code, it) {
+  const b = m?.banks[code];
+  if (!b || b[it.key] === undefined) return null;
+  const amt = b[it.key];
+  const amts = Object.entries(m.banks).map(([c, x]) => [c, x[it.key]]).filter(([, v]) => v !== undefined);
+  const mix = Object.entries(m.banks).map(([c, x]) => [c, pctOf(x[it.key], x[it.base])]).filter(([, v]) => v !== null);
+  const prev = yearAgo(m)?.banks[code]?.[it.key];
+  const mktNow = amts.reduce((t, [, v]) => t + v, 0);
+  const ya = yearAgo(m);
+  const mktPrev = ya ? Object.values(ya.banks).reduce((t, x) => t + (x[it.key] || 0), 0) : null;
+  return {
+    amt, mix: pctOf(amt, b[it.base]), share: pctOf(amt, mktNow), n: amts.length, market: mktNow,
+    rank: 1 + amts.filter(([, v]) => v > amt).length,
+    mixRank: 1 + mix.filter(([, v]) => v > pctOf(amt, b[it.base])).length,
+    growth: prev ? pctOf(amt - prev, prev) : null,
+    mktGrowth: mktPrev ? pctOf(mktNow - mktPrev, mktPrev) : null,
+    mktMix: pctOf(mktNow, sumOf(m, it.base)),
+  };
 }
 
-const finMonth = () => state.fin?.months.find((m) => m.id === state.finMonth) || state.fin?.months.at(-1);
+// Ratios for the Profit & efficiency section (value per bank; better = ranking direction).
+const FIN_METRICS = [
+  { key: "net_profit", label: "Net profit", note: "year to date", unit: "arba", better: "high", get: (b) => profitOf(b) },
+  { key: "profit_growth", label: "Net profit growth", note: "vs same month last year", unit: "pct", better: "high", median: true,
+    get: (b, m, c) => { const p = yearAgo(m)?.banks[c]; return p && profitOf(p) ? pctOf(profitOf(b) - profitOf(p), Math.abs(profitOf(p))) : null; } },
+  { key: "nii", label: "Net interest income", note: "year to date", unit: "arba", better: "high", get: (b) => b.interest_income - b.interest_expense },
+  { key: "interest_income", label: "Interest income", note: "year to date", unit: "arba", better: "high", get: (b) => b.interest_income },
+  { key: "interest_expense", label: "Interest expense", note: "year to date", unit: "arba", better: null, get: (b) => b.interest_expense },
+  { key: "fee_income", label: "Fee & commission income", note: "year to date", unit: "arba", better: "high", get: (b) => b.commission_income || 0 },
+  { key: "cost_income", label: "Cost to income", note: "staff + office costs ÷ operating income", unit: "pct", better: "low",
+    get: (b) => pctOf((b.staff_expense || 0) + (b.office_expense || 0), b.interest_income - b.interest_expense + (b.commission_income || 0) + (b.fx_income || 0) + (b.other_op_income || 0)) },
+  { key: "roa", label: "Return on assets", note: "annualised", unit: "pct", better: "high", get: (b, m) => pctOf(ann(profitOf(b), m), b.total_assets) },
+  { key: "roe", label: "Return on capital fund", note: "annualised", unit: "pct", better: "high", get: (b, m) => pctOf(ann(profitOf(b), m), b.capital_fund) },
+  { key: "cost_of_deposits", label: "Cost of deposits", note: "annualised, approx.", unit: "pct", better: "low", get: (b, m) => pctOf(ann(b.interest_exp_deposits, m), b.deposits) },
+  { key: "yield_on_loans", label: "Yield on loans", note: "annualised, approx.", unit: "pct", better: null, get: (b, m) => pctOf(ann(b.interest_inc_loans, m), b.loans) },
+  { key: "spread", label: "Spread", note: "loan yield − deposit cost, approx.", unit: "pp", better: "high",
+    get: (b, m) => { const y = pctOf(ann(b.interest_inc_loans, m), b.loans), c = pctOf(ann(b.interest_exp_deposits, m), b.deposits); return y === null || c === null ? null : y - c; } },
+  { key: "cd_ratio", label: "Loans ÷ deposits", unit: "pct", better: null, get: (b) => pctOf(b.loans, b.deposits) },
+  { key: "provision_cover", label: "Loan-loss provisions", note: "% of loans", unit: "pct", better: null, get: (b) => pctOf(b.loan_loss_provision, b.loans) },
+  { key: "total_assets", label: "Total assets", unit: "arba", better: "high", get: (b) => b.total_assets },
+  { key: "capital_fund", label: "Capital fund", unit: "arba", better: "high", get: (b) => b.capital_fund },
+];
 function finVal(m, code, mt) {
   const b = m?.banks[code];
   if (!b) return null;
   const v = mt.get(b, m, code);
   return v === null || v === undefined || !Number.isFinite(v) ? null : v;
 }
-function finFmt(mt, v) {
-  if (v === null) return '<span class="na">—</span>';
-  if (mt.unit === "arba") return `Rs ${v >= 100 ? v.toFixed(1) : v.toFixed(2)}<small> arba</small>`;
-  if (mt.unit === "pp") return `${v.toFixed(2)} pp`;
-  return pct(v);
-}
-const finPlain = (mt, v) => finFmt(mt, v).replace(/<[^>]+>/g, "");
-function finVsWords(mt, d) {
-  if (d === null || !Number.isFinite(d)) return "";
-  if (Math.abs(d) < 0.005) return `<div class="b-vs">same as ${esc(R())}</div>`;
-  const g = Math.abs(d), amt = mt.unit === "arba" ? `Rs ${g.toFixed(g >= 100 ? 1 : 2)} arba` : `${g.toFixed(2)} pp`;
-  return `<div class="b-vs">${amt} ${d < 0 ? "below" : "above"} ${esc(R())}</div>`;
-}
-// Average across banks (median for growth, where a few banks swing widely) and the reference bank's rank.
+const finFmt = (mt, v) => (v === null ? "—" : mt.unit === "arba" ? fmtArba(v) : mt.unit === "pp" ? `${v.toFixed(2)} pp` : fmtPct(v, 2));
 function finStats(m, mt) {
-  const vals = m ? Object.keys(m.banks).map((c) => finVal(m, c, mt)).filter((v) => v !== null) : [];
-  if (!vals.length) return null;
-  const sorted = [...vals].sort((a, b) => a - b);
-  const median = sorted.length % 2 ? sorted[(sorted.length - 1) / 2] : (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
-  const avg = mt.median ? median : vals.reduce((a, b) => a + b, 0) / vals.length;
+  const pairs = Object.keys(m.banks).map((c) => [c, finVal(m, c, mt)]).filter(([, v]) => v !== null);
+  if (!pairs.length) return null;
+  const vals = pairs.map(([, v]) => v).sort((a, b) => a - b);
+  const median = vals.length % 2 ? vals[(vals.length - 1) / 2] : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2;
   const ref = finVal(m, REF, mt);
-  const rank = mt.better && ref !== null ? 1 + vals.filter((v) => (mt.better === "high" ? v > ref : v < ref)).length : null;
-  return { n: vals.length, avg, avgLabel: mt.median ? "median" : "average", min: sorted[0], max: sorted.at(-1), ref, rank };
+  const best = mt.better ? pairs.reduce((a, p) => ((mt.better === "high" ? p[1] > a[1] : p[1] < a[1]) ? p : a)) : null;
+  return {
+    n: vals.length, avg: mt.median ? median : vals.reduce((a, b) => a + b, 0) / vals.length, avgLabel: mt.median ? "median" : "average",
+    ref, best, rank: mt.better && ref !== null ? 1 + vals.filter((v) => (mt.better === "high" ? v > ref : v < ref)).length : null,
+  };
 }
-function finRank(m, mt, code) {
-  const v = finVal(m, code, mt);
-  if (!mt.better || v === null) return null;
-  const vals = Object.keys(m.banks).map((c) => finVal(m, c, mt)).filter((x) => x !== null);
-  return { rank: 1 + vals.filter((x) => (mt.better === "high" ? x > v : x < v)).length, n: vals.length };
+function rankChip(rank, n) {
+  if (!rank) return "";
+  const t = rank <= n / 3 ? "t1" : rank > (2 * n) / 3 ? "t3" : "t2";
+  return `<span class="rk ${t}" title="Rank ${rank} of ${n}">#${rank}</span>`;
 }
-function rankChip(r) {
-  if (!r) return "";
-  const t = r.rank <= r.n / 3 ? "t1" : r.rank > (2 * r.n) / 3 ? "t3" : "t2";
-  return `<span class="rk ${t}" title="Rank ${r.rank} of ${r.n}">#${r.rank}</span>`;
+const rankText = (rank, n) => (rank ? `<b>#${rank}</b> of ${n}` : "—");
+
+async function loadFinancials() {
+  try {
+    state.fin = await getJson("data/nrb/financials.json?t=" + Date.now());
+    state.finMonth ||= state.fin.months.at(-1)?.id;
+    if (state.model) { renderFinancials(); renderOverviewFinancials(); }
+  } catch (err) {
+    $("fin-body").innerHTML = `<p class="notice">Could not load the NRB figures (${esc(err.message)}).</p>`;
+  }
 }
+const finMonth = () => state.fin?.months.find((m) => m.id === state.finMonth) || state.fin?.months.at(-1);
+const FIN_SECTIONS = [["deposit", "Deposits"], ["loan", "Loans"], ["profit", "Profit & efficiency"]];
 
 function renderFinancials() {
   const m = finMonth();
   if (!m || !state.model) return;
-  const months = state.fin.months;
-  $("fin-month").innerHTML = [...months].reverse().map((x) => `<option value="${esc(x.id)}" ${x.id === m.id ? "selected" : ""}>${esc(x.bs)} (${esc(x.label)})</option>`).join("");
-  $("fin-source").innerHTML = `Nepal Rastra Bank monthly statistics · ${esc(m.bs)} (${esc(m.label)}) · profit &amp; loss is fiscal year to date (${m.fy_month} month${m.fy_month > 1 ? "s" : ""}) · <a href="${esc(m.source)}" target="_blank" rel="noopener">source file</a>`;
-
-  const card = (key, cls = "") => {
-    const mt = FIN_METRICS.find((x) => x.key === key), s = finStats(m, mt);
-    if (!s) return "";
-    const rank = s.rank ? `${ordinal(s.rank)} of ${s.n} (1 = ${mt.better === "high" ? "highest" : "lowest"})` : "";
-    return `<div class="kpi ${cls}"><div class="k-label">${esc(R())} · ${esc(mt.label)}${mt.note ? ` <span class="k-sub">(${esc(mt.note)})</span>` : ""}</div>
-      <div class="k-value">${finFmt(mt, s.ref)}</div><div class="k-note">${rank}${rank ? " · " : ""}market ${s.avgLabel} ${finPlain(mt, s.avg)}</div></div>`;
-  };
-  $("fin-kpis").innerHTML = card("deposit_share", "featured") + card("net_profit") + card("profit_growth") + card("casa") + card("cost_of_deposits");
-
-  renderFinTrend();
-
-  const group = state.finGroup || "key";
-  $("fin-groups").innerHTML = FIN_GROUPS.map(([g, l]) => `<button type="button" data-fgroup="${g}" aria-pressed="${g === group}">${esc(l)}</button>`).join("");
-  const metrics = FIN_METRICS.filter((mt) => group === "all" || mt.groups.includes(group));
-  if (state.finSort && !metrics.some((mt) => mt.key === state.finSort)) state.finSort = null;
-  const sortMt = FIN_METRICS.find((mt) => mt.key === state.finSort);
-  const codes = Object.keys(m.banks).filter((c) => c !== REF);
-  if (sortMt) {
-    let dir = sortMt.better === "low" ? 1 : -1;
-    if (state.finDir === "worst") dir = -dir;
-    codes.sort((a, b) => {
-      const va = finVal(m, a, sortMt), vb = finVal(m, b, sortMt);
-      if (va === null) return 1;
-      if (vb === null) return -1;
-      return (va - vb) * dir;
-    });
-  } else codes.sort((a, b) => (state.model.nameOf[a] || a).localeCompare(state.model.nameOf[b] || b));
-  const list = m.banks[REF] ? [REF, ...codes] : codes;
-  const stats = Object.fromEntries(metrics.map((mt) => [mt.key, finStats(m, mt)]));
-
-  let head = `<thead><tr><th class="rank-col">${sortMt ? "#" : ""}</th><th class="bank-col"><button type="button" data-fsort="">Bank</button></th>`;
-  for (const mt of metrics) {
-    const s = stats[mt.key], on = state.finSort === mt.key;
-    head += `<th class="num ${on ? "on" : ""}"><button type="button" data-fsort="${mt.key}" title="Sort by ${esc(mt.label)}">${esc(mt.label)}${on ? (state.finDir === "worst" ? " ↑" : " ↓") : ""}</button>
-      <div class="th-note">${mt.better ? (mt.better === "high" ? "higher is better" : "lower is better") : esc(mt.note || "not ranked")}</div>
-      ${s && s.rank ? `<div class="th-rank">${esc(R())} ${s.rank}/${s.n}</div>` : ""}</th>`;
-  }
-  head += `</tr></thead>`;
-  let body = "";
-  for (const code of list) {
-    const me = code === REF;
-    const r = sortMt ? finRank(m, sortMt, code) : null;
-    body += `<tr class="${me ? "ref-row" : ""}"><td class="rank-col">${sortMt ? (r ? r.rank : "—") : ""}</td>
-      <td class="bank-col"><b>${esc(SCRIP[code] || code)}</b><span class="bank-full">${esc(state.model.nameOf[code] || code)}${me ? " · comparison bank" : ""}</span></td>`;
-    for (const mt of metrics) {
-      const v = finVal(m, code, mt), rv = finVal(m, REF, mt);
-      body += `<td class="num"><div class="cell-top"><span class="val">${finFmt(mt, v)}</span>${rankChip(finRank(m, mt, code))}</div>${me || v === null || rv === null ? "" : finVsWords(mt, v - rv)}</td>`;
-    }
-    body += `</tr>`;
-  }
-  body += `<tr class="avg-row"><td></td><td class="bank-col">All ${Object.keys(m.banks).length} banks</td>${metrics.map((mt) => `<td class="num">${stats[mt.key] ? finFmt(mt, stats[mt.key].avg) + `<div class="b-vs">${stats[mt.key].avgLabel}</div>` : ""}</td>`).join("")}</tr>`;
-  const t = $("fin-table");
-  t.innerHTML = head + `<tbody>${body}</tbody>`;
-  const h = t.tHead?.offsetHeight;
-  if (h) t.style.setProperty("--fin-head-h", h + "px");
+  state.finSection ||= "deposit";
+  state.finLoanView ||= "product";
+  $("fin-month").innerHTML = [...state.fin.months].reverse().map((x) => `<option value="${esc(x.id)}" ${x.id === m.id ? "selected" : ""}>${esc(x.bs)} (${esc(x.label)})</option>`).join("");
+  $("fin-source").innerHTML = `Nepal Rastra Bank monthly statistics · position at <b>${esc(m.bs)}</b> (${esc(m.label)}) · profit figures are this fiscal year to date (${m.fy_month} month${m.fy_month > 1 ? "s" : ""}) · <a href="${esc(m.source)}" target="_blank" rel="noopener">NRB file</a>`;
+  $("fin-sections").innerHTML = FIN_SECTIONS.map(([k, l]) => `<button type="button" data-fsec="${k}" aria-pressed="${k === state.finSection}">${esc(l)}</button>`).join("");
+  document.querySelectorAll(".ref-label").forEach((el) => (el.textContent = R()));
+  if (state.finSection === "profit") return renderFinProfit(m);
+  const kind = state.finSection === "deposit" ? "deposit" : state.finLoanView;
+  renderFinSnapshot(m);
+  renderFinBreakdown(m, kind);
 }
 
-// Trend chart: the reference bank, the market average, and optionally one more bank.
-function renderFinTrend() {
+// "At a glance" cards for the comparison bank.
+function renderFinSnapshot(m) {
+  const card = (it, cls = "") => {
+    const f = itemFacts(m, REF, it);
+    if (!f) return "";
+    return `<div class="kpi ${cls}"><div class="k-label">${esc(it.label)}</div><div class="k-value">${fmtArba(f.amt)}</div>
+      <div class="k-facts">${it.total ? "" : `<span><b>${fmtPct(f.mix)}</b> of ${esc(R())}'s ${it.base}</span>`}<span><b>${fmtPct(f.share, 2)}</b> market share</span><span>Rank <b>#${f.rank}</b> of ${f.n}</span>${f.growth !== null ? `<span><b>${fmtSigned(f.growth)}</b> in a year</span>` : ""}</div></div>`;
+  };
+  const I = (k) => itemByKey(k);
+  const cards = state.finSection === "deposit"
+    ? [card(I("deposits"), "featured"), card(I("dep_current")), card(I("dep_savings")), card(I("dep_fixed")), card(I("dep_call"))]
+    : [card(I("loans"), "featured"), ...topProducts(m, 4).map((it) => card(it))];
+  $("fin-kpis").innerHTML = cards.join("");
+  $("fin-kpis").className = "kpis fin-kpis";
+}
+// The comparison bank's largest loan products, for the Loans cards.
+const topProducts = (m, n) => FIN_ITEMS.product.items.filter((it) => !it.memo).map((it) => ({ ...it, kind: "product", base: "loans" }))
+  .sort((a, b) => (m.banks[REF]?.[b.key] || 0) - (m.banks[REF]?.[a.key] || 0)).slice(0, n);
+
+// Breakdown table (deposit types, loan products or sectors) for the comparison bank.
+function renderFinBreakdown(m, kind) {
+  const g = FIN_ITEMS[kind];
+  const items = g.items.map((it) => ({ ...it, kind, base: g.base, baseLabel: g.baseLabel }));
+  const sel = items.find((it) => it.key === state.finItem?.[kind]) || items[kind === "deposit" ? 0 : 0];
+  state.finItem = { ...(state.finItem || {}), [kind]: sel.key };
+  const rows = items.map((it) => ({ it, f: itemFacts(m, REF, it) })).filter((r) => r.f);
+  const sortKey = state.finBdSort?.[kind] || "amt";
+  const dir = sortKey === "rank" ? 1 : -1;
+  rows.sort((a, b) => (a.it.memo ? 1 : 0) - (b.it.memo ? 1 : 0) || ((a.f[sortKey] ?? -1e18) - (b.f[sortKey] ?? -1e18)) * dir);
+  const th = (k, label, title = "") => `<th class="num ${sortKey === k ? "on" : ""}"><button type="button" data-bdsort="${k}" data-kind="${kind}" title="${esc(title || "Sort by " + label)}">${label}${sortKey === k ? " ↓" : ""}</button></th>`;
+  const head = `<thead><tr><th>${kind === "deposit" ? "Deposit type" : kind === "product" ? "Loan product" : "Lending sector"}</th>
+    ${th("amt", `${esc(R())} amount`)}${th("mix", `% of ${esc(R())}'s ${g.baseLabel}`)}${th("share", "Market share", `${R()}'s share of all 20 banks' total`)}${th("rank", "Rank among banks", "1 = largest amount")}
+    ${th("growth", `${esc(R())} growth, 1 yr`)}${th("mktGrowth", "Market growth, 1 yr")}${th("mktMix", "Market mix", `% of all banks' ${g.baseLabel}`)}</tr></thead>`;
+  const total = itemFacts(m, REF, { key: g.base, base: g.base, label: FIN_TOTALS[kind].label });
+  const body = rows.map(({ it, f }) => `<tr class="bd-row ${it.key === sel.key ? "sel" : ""} ${it.memo ? "memo" : ""}" data-bditem="${it.key}" data-kind="${kind}" title="Show how all banks compare on ${esc(it.label)}">
+      <td class="bd-name">${esc(it.label)}${it.memo ? '<span class="memo-tag">memo, overlaps other products</span>' : ""}</td>
+      <td class="num"><b>${fmtArba(f.amt)}</b></td>
+      <td class="num"><span class="mixbar"><i style="width:${Math.min(100, f.mix || 0).toFixed(1)}%"></i></span>${fmtPct(f.mix)}</td>
+      <td class="num">${fmtPct(f.share, 2)}</td>
+      <td class="num">${rankChip(f.rank, f.n)} <span class="dim">of ${f.n}</span></td>
+      <td class="num ${f.growth !== null && f.mktGrowth !== null ? (f.growth >= f.mktGrowth ? "up" : "down") : ""}">${fmtSigned(f.growth)}</td>
+      <td class="num dim">${fmtSigned(f.mktGrowth)}</td>
+      <td class="num dim">${fmtPct(f.mktMix)}</td></tr>`).join("") +
+    (total ? `<tr class="bd-total"><td>${esc(FIN_TOTALS[kind].label)}</td><td class="num"><b>${fmtArba(total.amt)}</b></td><td class="num">100%</td><td class="num">${fmtPct(total.share, 2)}</td><td class="num">${rankChip(total.rank, total.n)} <span class="dim">of ${total.n}</span></td><td class="num">${fmtSigned(total.growth)}</td><td class="num dim">${fmtSigned(total.mktGrowth)}</td><td class="num dim">100%</td></tr>` : "");
+  const switcher = state.finSection === "loan" ? `<div class="toggle" role="group" aria-label="Break loans down by">
+      <button type="button" data-lview="product" aria-pressed="${kind === "product"}">By product</button><button type="button" data-lview="sector" aria-pressed="${kind === "sector"}">By sector</button></div>` : "";
+  $("fin-breakdown").innerHTML = `<header class="card-head chart-head"><div>
+      <h2>${esc(R())}'s ${kind === "deposit" ? "deposits by type" : kind === "product" ? "loans by product" : "loans by sector"}</h2>
+      <p>Largest first · <b>green growth</b> = growing faster than the market · click a row to compare all banks on it</p></div>${switcher}</header>
+    <div class="bd-wrap"><table class="bd">${head}<tbody>${body}</tbody></table></div>`;
+  renderFinRanking(m, sel);
+  renderFinItemTrend(sel);
+}
+
+// All 20 banks on one line item: by amount, or by how much of their own book it is.
+function renderFinRanking(m, it) {
+  const by = state.finRankBy || "amt";
+  const rows = Object.keys(m.banks).map((c) => ({ c, f: itemFacts(m, c, it) })).filter((r) => r.f);
+  rows.sort((a, b) => (by === "amt" ? b.f.amt - a.f.amt : (b.f.mix ?? -1) - (a.f.mix ?? -1)));
+  const max = Math.max(...rows.map((r) => (by === "amt" ? r.f.amt : r.f.mix || 0)), 1);
+  $("fin-rank").innerHTML = `<header class="card-head chart-head"><div>
+      <h2>${esc(it.label)}: all banks</h2><p>${esc(m.bs)} · ${by === "amt" ? "largest amount first" : `largest share of the bank's own ${it.base} first`}</p></div>
+      <div class="toggle" role="group" aria-label="Rank by"><button type="button" data-rankby="amt" aria-pressed="${by === "amt"}">By amount</button><button type="button" data-rankby="mix" aria-pressed="${by === "mix"}">By % of own ${esc(it.base)}</button></div></header>
+    <div class="rank-list">${rows.map((r, i) => {
+      const me = r.c === REF, v = by === "amt" ? r.f.amt : r.f.mix || 0;
+      return `<div class="rank-row ${me ? "me" : ""}"><span class="rr-n">${i + 1}</span>
+        <span class="rr-bank"><b>${esc(SCRIP[r.c] || r.c)}</b> <span>${esc(bankName(r.c))}</span></span>
+        <span class="rr-bar"><i style="width:${((100 * v) / max).toFixed(1)}%"></i></span>
+        <span class="rr-v"><b>${by === "amt" ? fmtArba(r.f.amt) : fmtPct(r.f.mix)}</b><small>${by === "amt" ? `${fmtPct(r.f.mix)} of its ${esc(it.base)}` : fmtArba(r.f.amt)} · ${fmtPct(r.f.share, 2)} market share</small></span></div>`;
+    }).join("")}</div>`;
+}
+
+// Month-by-month table for the comparison bank on one line item.
+function renderFinItemTrend(it) {
   const months = state.fin.months;
-  const mt = FIN_METRICS.find((x) => x.key === state.finTrend) || FIN_METRICS.find((x) => x.key === "deposit_share");
-  $("fin-trend-metric").innerHTML = FIN_GROUPS.filter(([g]) => !["key", "all"].includes(g)).map(([g, gl]) =>
-    `<optgroup label="${esc(gl)}">${FIN_METRICS.filter((x) => x.groups.includes(g)).map((x) => `<option value="${x.key}" ${x.key === mt.key ? "selected" : ""}>${esc(x.label)}</option>`).join("")}</optgroup>`).join("");
-  const others = Object.keys(state.fin.months.at(-1).banks).filter((c) => c !== REF).sort((a, b) => (SCRIP[a] || a).localeCompare(SCRIP[b] || b));
-  if (state.finVs === REF) state.finVs = "";
-  $("fin-trend-vs").innerHTML = `<option value="">— none —</option>` + others.map((c) => `<option value="${esc(c)}" ${c === state.finVs ? "selected" : ""}>${esc(SCRIP[c] || c)} · ${esc(state.model.nameOf[c] || c)}</option>`).join("");
+  const lastId = months.at(-1).id;
+  const ids = Array.from({ length: 13 }, (_, i) => shiftId(lastId, -i));
+  const max = Math.max(...ids.map((id) => monthById(id)?.banks[REF]?.[it.key] || 0), 1);
+  const rows = ids.map((id, i) => {
+    const m = monthById(id);
+    const [yy, mo] = id.split("-").map(Number);
+    const name = m ? m.bs : `${NEPALI_MONTH_NAMES[mo - 1]} ${yy}`;
+    if (!m) return `<tr class="gap-row"><td>${esc(name)}</td><td colspan="6" class="dim">Not published by NRB as a spreadsheet (PDF only)</td></tr>`;
+    const f = itemFacts(m, REF, it);
+    const prevM = monthById(ids[i + 1]);
+    const pf = prevM ? itemFacts(prevM, REF, it) : null;
+    const ch = f && pf ? f.amt - pf.amt : null;
+    return `<tr class="${id === state.finMonth ? "cur" : ""}"><td>${esc(name)}</td>
+      <td class="num"><span class="mixbar wide"><i style="width:${(100 * (f?.amt || 0) / max).toFixed(1)}%"></i></span><b>${f ? fmtArba(f.amt) : "—"}</b></td>
+      <td class="num ${ch === null ? "" : ch >= 0 ? "up" : "down"}">${ch === null ? "—" : `${ch >= 0 ? "+" : "−"}${fmtArba(Math.abs(ch)).replace("Rs ", "Rs ")}`}</td>
+      <td class="num">${f ? fmtPct(f.mix) : "—"}</td><td class="num">${f ? fmtPct(f.share, 2) : "—"}</td><td class="num">${f ? `#${f.rank}` : "—"}</td></tr>`;
+  }).join("");
+  $("fin-trend").innerHTML = `<header class="card-head"><h2>${esc(R())} · ${esc(it.label)}: month by month</h2>
+      <p>Last 12 months, newest first · change is against the month before</p></header>
+    <div class="bd-wrap"><table class="bd trend-t"><thead><tr><th>Month</th><th class="num">Amount</th><th class="num">Change in month</th><th class="num">% of ${esc(R())}'s ${esc(it.base)}</th><th class="num">Market share</th><th class="num">Rank among banks</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+const NEPALI_MONTH_NAMES = ["Baisakh", "Jestha", "Asar", "Shrawan", "Bhadau", "Asoj", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"];
 
-  // one slot per calendar month from first to last, so months NRB didn't publish show as gaps
-  const ids = [];
-  let [y, mo] = months[0].id.split("-").map(Number);
-  const [ly, lmo] = months.at(-1).id.split("-").map(Number);
-  while (y < ly || (y === ly && mo <= lmo)) { ids.push(`${y}-${String(mo).padStart(2, "0")}`); if (++mo > 12) { mo = 1; y++; } }
-  const byId = Object.fromEntries(months.map((m) => [m.id, m]));
-  const series = [
-    { name: R(), cls: "s-ref", vals: ids.map((id) => (byId[id] ? finVal(byId[id], REF, mt) : null)) },
-    { name: `Market ${mt.median ? "median" : "average"}`, cls: "s-avg", vals: ids.map((id) => (byId[id] ? finStats(byId[id], mt)?.avg ?? null : null)) },
-  ];
-  if (state.finVs) series.push({ name: SCRIP[state.finVs] || state.finVs, cls: "s-vs", vals: ids.map((id) => (byId[id] ? finVal(byId[id], state.finVs, mt) : null)) });
+// Profit & efficiency: the comparison bank's ratios with rank, market average and best bank.
+function renderFinProfit(m) {
+  const sel = FIN_METRICS.find((x) => x.key === state.finMetric) || FIN_METRICS[0];
+  state.finMetric = sel.key;
+  const K = (k) => FIN_METRICS.find((x) => x.key === k);
+  const card = (mt, cls = "") => {
+    const s = finStats(m, mt);
+    if (!s) return "";
+    return `<div class="kpi ${cls}"><div class="k-label">${esc(mt.label)}${mt.note ? ` <span class="k-sub">(${esc(mt.note)})</span>` : ""}</div><div class="k-value">${finFmt(mt, s.ref)}</div>
+      <div class="k-facts">${s.rank ? `<span>Rank <b>#${s.rank}</b> of ${s.n}</span>` : ""}<span>Market ${s.avgLabel} <b>${finFmt(mt, s.avg)}</b></span></div></div>`;
+  };
+  $("fin-kpis").innerHTML = [card(K("net_profit"), "featured"), card(K("profit_growth")), card(K("nii")), card(K("cost_income")), card(K("spread"))].join("");
+  $("fin-kpis").className = "kpis fin-kpis";
+  const body = FIN_METRICS.map((mt) => {
+    const s = finStats(m, mt);
+    if (!s) return "";
+    return `<tr class="bd-row ${mt.key === sel.key ? "sel" : ""}" data-fmetric="${mt.key}" title="Show how all banks compare on ${esc(mt.label)}">
+      <td class="bd-name">${esc(mt.label)}${mt.note ? `<span class="memo-tag">${esc(mt.note)}</span>` : ""}</td>
+      <td class="num"><b>${finFmt(mt, s.ref)}</b></td><td class="num">${s.rank ? `${rankChip(s.rank, s.n)} <span class="dim">of ${s.n}</span>` : '<span class="dim">not ranked</span>'}</td>
+      <td class="num">${finFmt(mt, s.avg)}${mt.median ? ' <span class="dim">(median)</span>' : ""}</td>
+      <td class="num">${s.best ? `${finFmt(mt, s.best[1])} <span class="dim">${esc(SCRIP[s.best[0]] || s.best[0])}</span>` : "—"}</td></tr>`;
+  }).join("");
+  $("fin-breakdown").innerHTML = `<header class="card-head"><h2>${esc(R())}'s profitability and efficiency</h2><p>${m.fy_month}-month year-to-date figures · rates marked annualised are scaled to a full year · click a row to compare all banks</p></header>
+    <div class="bd-wrap"><table class="bd"><thead><tr><th>Measure</th><th class="num">${esc(R())}</th><th class="num">Rank among banks</th><th class="num">Market average</th><th class="num">Best bank</th></tr></thead><tbody>${body}</tbody></table></div>`;
 
-  const all = series.flatMap((s) => s.vals).filter((v) => v !== null);
-  const W = 960, H = 300, L = 64, Rt = 16, T = 16, B = 44;
-  let lo = Math.min(...all), hi = Math.max(...all);
-  if (lo === hi) { lo -= 1; hi += 1; }
-  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
-  if (lo > 0 && lo < (hi - lo) * 0.5) lo = 0;
-  const x = (i) => L + (i * (W - L - Rt)) / Math.max(1, ids.length - 1);
-  const yv = (v) => T + ((hi - v) * (H - T - B)) / (hi - lo);
-  const ticks = Array.from({ length: 5 }, (_, i) => lo + ((hi - lo) * i) / 4);
-  const nep = ["Bai", "Jes", "Asa", "Shr", "Bha", "Aso", "Kar", "Man", "Pou", "Mag", "Fal", "Cha"];
-  let svg = `<svg viewBox="0 0 ${W} ${H}" class="trend" role="img" aria-label="${esc(mt.label)} over time">`;
-  svg += ticks.map((v) => `<line x1="${L}" x2="${W - Rt}" y1="${yv(v).toFixed(1)}" y2="${yv(v).toFixed(1)}" class="grid-l"/><text x="${L - 8}" y="${(yv(v) + 4).toFixed(1)}" class="ax" text-anchor="end">${finPlain(mt, v).replace(" arba", "")}</text>`).join("");
-  ids.forEach((id, i) => {
-    const [yy, mm] = id.split("-").map(Number);
-    if (i % 2 === 0 || i === ids.length - 1) svg += `<text x="${x(i).toFixed(1)}" y="${H - 22}" class="ax" text-anchor="middle">${nep[mm - 1]}</text>${mm === 4 || i === 0 ? `<text x="${x(i).toFixed(1)}" y="${H - 6}" class="ax yr" text-anchor="middle">${yy}</text>` : ""}`;
-    if (!byId[id]) svg += `<rect x="${(x(i) - 6).toFixed(1)}" y="${T}" width="12" height="${H - T - B}" class="gap"><title>${nep[mm - 1]} ${yy}: NRB published this month as PDF only</title></rect>`;
-  });
-  for (const s of series) {
-    let d = "", pen = false;
-    s.vals.forEach((v, i) => { if (v === null) { pen = false; return; } d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${yv(v).toFixed(1)}`; pen = true; });
-    svg += `<path d="${d}" class="line ${s.cls}"/>`;
-    s.vals.forEach((v, i) => { if (v !== null) svg += `<circle cx="${x(i).toFixed(1)}" cy="${yv(v).toFixed(1)}" r="3.2" class="pt ${s.cls}"><title>${esc(s.name)} · ${byId[ids[i]].bs}: ${finPlain(mt, v)}</title></circle>`; });
-  }
-  svg += `</svg>`;
-  $("fin-trend").innerHTML = svg;
-  $("fin-trend-legend").innerHTML = series.map((s) => `<span><i class="sw ${s.cls}"></i>${esc(s.name)}</span>`).join("") +
-    (ids.some((id) => !byId[id]) ? `<span><i class="sw gapk"></i>Not published as a spreadsheet</span>` : "");
-  const last = series[0].vals.filter((v) => v !== null), firstV = last[0], lastV = last.at(-1);
-  $("fin-trend-note").textContent = last.length > 1 ? `${R()}: ${finPlain(mt, firstV)} → ${finPlain(mt, lastV)} over ${ids.length} months${mt.note ? ` · ${mt.note}` : ""}` : "";
+  // ranking + trend for the selected measure
+  const rows = Object.keys(m.banks).map((c) => ({ c, v: finVal(m, c, sel) })).filter((r) => r.v !== null);
+  rows.sort((a, b) => (sel.better === "low" ? a.v - b.v : b.v - a.v));
+  const lo = Math.min(0, ...rows.map((r) => r.v)), hi = Math.max(...rows.map((r) => r.v), 0);
+  const span = hi - lo || 1;
+  $("fin-rank").innerHTML = `<header class="card-head"><h2>${esc(sel.label)}: all banks</h2><p>${esc(m.bs)} · ${sel.better === "low" ? "lowest (best) first" : "highest first"}</p></header>
+    <div class="rank-list">${rows.map((r, i) => `<div class="rank-row ${r.c === REF ? "me" : ""}"><span class="rr-n">${sel.better ? i + 1 : ""}</span>
+      <span class="rr-bank"><b>${esc(SCRIP[r.c] || r.c)}</b> <span>${esc(bankName(r.c))}</span></span>
+      <span class="rr-bar">${lo < 0 ? `<i class="zero" style="left:${((-lo / span) * 100).toFixed(1)}%"></i>` : ""}<i class="${r.v < 0 ? "neg" : ""}" style="left:${(((Math.min(0, r.v) - lo) / span) * 100).toFixed(1)}%;width:${((Math.abs(r.v) / span) * 100).toFixed(1)}%"></i></span>
+      <span class="rr-v"><b>${finFmt(sel, r.v)}</b></span></div>`).join("")}</div>`;
+  const ids = Array.from({ length: 13 }, (_, i) => shiftId(state.fin.months.at(-1).id, -i));
+  $("fin-trend").innerHTML = `<header class="card-head"><h2>${esc(R())} · ${esc(sel.label)}: month by month</h2><p>Last 12 months, newest first · profit items restart each Shrawan (new fiscal year)</p></header>
+    <div class="bd-wrap"><table class="bd trend-t"><thead><tr><th>Month</th><th class="num">${esc(R())}</th><th class="num">Market ${sel.median ? "median" : "average"}</th><th class="num">Rank among banks</th></tr></thead><tbody>${ids.map((id) => {
+      const mm = monthById(id); const [yy, mo] = id.split("-").map(Number);
+      if (!mm) return `<tr class="gap-row"><td>${NEPALI_MONTH_NAMES[mo - 1]} ${yy}</td><td colspan="3" class="dim">Not published by NRB as a spreadsheet (PDF only)</td></tr>`;
+      const s = finStats(mm, sel);
+      return `<tr class="${id === state.finMonth ? "cur" : ""}"><td>${esc(mm.bs)}</td><td class="num"><b>${s ? finFmt(sel, s.ref) : "—"}</b></td><td class="num">${s ? finFmt(sel, s.avg) : "—"}</td><td class="num">${s && s.rank ? `#${s.rank} of ${s.n}` : "—"}</td></tr>`;
+    }).join("")}</tbody></table></div>`;
+}
+
+// Overview: the latest NRB position of the comparison bank, in one block.
+function renderOverviewFinancials() {
+  const box = $("ov-fin");
+  if (!box || !state.fin || !state.model) return;
+  const m = state.fin.months.at(-1);
+  const line = (it) => {
+    const f = itemFacts(m, REF, it);
+    if (!f) return "";
+    return `<div class="kpi"><div class="k-label">${esc(it.label)}</div><div class="k-value">${fmtArba(f.amt)}</div>
+      <div class="k-facts">${it.total ? "" : `<span><b>${fmtPct(f.mix)}</b> of ${esc(R())}'s ${it.base}</span>`}<span><b>${fmtPct(f.share, 2)}</b> market share</span><span>Rank <b>#${f.rank}</b> of ${f.n}</span>${f.growth !== null ? `<span><b>${fmtSigned(f.growth)}</b> in a year</span>` : ""}</div></div>`;
+  };
+  const I = (k) => itemByKey(k);
+  const np = FIN_METRICS[0], s = finStats(m, np), pg = finStats(m, FIN_METRICS[1]);
+  const products = FIN_ITEMS.product.items.filter((it) => !it.memo).map((it) => ({ it: { ...it, kind: "product", base: "loans" } })).map((x) => ({ ...x, f: itemFacts(m, REF, x.it) })).filter((x) => x.f && x.f.amt > 0);
+  const byRank = [...products].sort((a, b) => a.f.rank - b.f.rank);
+  const li = (x) => `<li><span>${esc(x.it.label)}</span><b>#${x.f.rank}</b><span class="dim">${fmtArba(x.f.amt)} · ${fmtPct(x.f.share, 2)} share</span></li>`;
+  box.innerHTML = `<div class="section-title"><h2>Financial position · ${esc(m.bs)}</h2>
+      <p>From Nepal Rastra Bank's monthly statistics (${esc(m.label)}) · <button type="button" class="linkish" data-tab="fin">Open Financials →</button></p></div>
+    <div class="kpis fin-kpis">${line(I("deposits"))}${line(I("dep_current"))}${line(I("dep_savings"))}${line(I("loans"))}
+      ${s ? `<div class="kpi"><div class="k-label">Net profit <span class="k-sub">(year to date)</span></div><div class="k-value">${fmtArba(s.ref)}</div><div class="k-facts"><span>Rank <b>#${s.rank}</b> of ${s.n}</span>${pg && pg.ref !== null ? `<span><b>${fmtSigned(pg.ref)}</b> vs a year earlier</span>` : ""}</div></div>` : ""}</div>
+    <div class="ov-loans">
+      <div class="card ov-list"><h3>Loan products where ${esc(R())} ranks highest</h3><ol>${byRank.slice(0, 4).map(li).join("")}</ol></div>
+      <div class="card ov-list"><h3>Loan products where ${esc(R())} ranks lowest</h3><ol>${byRank.slice(-4).reverse().map(li).join("")}</ol></div>
+    </div>`;
 }
 
 // Grids fill the window from their top edge down.
@@ -947,7 +1047,7 @@ const PCT = "0.00%";
 const PP = '+0.00" pp";-0.00" pp";0.00" pp"';
 const GAP = '"▲ "0.00;"▼ "0.00;"="';
 const DIFF = () => `0.00" pp above ${R()}";0.00" pp below ${R()}";"same as ${R()}"`;
-const SHEET_FOR_TAB = { summary: "Overview", deposit: "Deposits", loan: "Lending", base: "Base rate", banks: "Banks", fin: "Financials" };
+const SHEET_FOR_TAB = { summary: "Overview", deposit: "Deposits", loan: "Lending", base: "Base rate", banks: "Banks", fin: "Fin loan products" };
 
 let excelLib = null;
 function loadExcelJS() {
@@ -1263,49 +1363,77 @@ function addBanksSheet(wb) {
 function addFinancialSheets(wb) {
   const m = finMonth();
   if (!m) return;
-  const fmt = (mt) => (mt.unit === "arba" ? "#,##0.00" : '0.00"' + (mt.unit === "pp" ? " pp" : "%") + '"');
-  const label = (mt) => `${mt.label}${mt.unit === "arba" ? " (Rs arba)" : mt.unit === "pp" ? " (pp)" : " (%)"}${mt.note ? ` — ${mt.note}` : ""}`;
-
-  // 1. Every bank, every measure, for the month shown on the site
-  const ws = wb.addWorksheet("Financials", { properties: { tabColor: { argb: XL.brand } } });
-  const cols = ["Symbol", "Bank", ...FIN_METRICS.map(label)];
-  sheetTitle(ws, `Bank financials — ${m.bs} (${m.label})`, cols.length);
-  ws.getCell(2, 1).value = `Nepal Rastra Bank monthly statistics · profit and loss is fiscal year to date (${m.fy_month} months); rates marked annualised are scaled to a year · ${m.source}`;
-  const H = 4;
-  headerRow(ws, H, cols, { textCols: 2, height: 54 });
+  const r2 = (v) => (v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(v * 100) / 100);
   const codes = [REF, ...Object.keys(m.banks).filter((c) => c !== REF).sort((a, b) => (SCRIP[a] || a).localeCompare(SCRIP[b] || b))].filter((c) => m.banks[c]);
+  const intro = `Nepal Rastra Bank monthly statistics · position at ${m.bs} (${m.label}) · amounts in Rs arba (billion) · ${m.source}`;
+  const highlight = (x, n) => { for (let c = 1; c <= n; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.brandInk } }; } };
+
+  // One sheet per breakdown: every bank × every item (amount, % of the bank's total, market share)
+  const breakdown = (name, title, kind) => {
+    const g = FIN_ITEMS[kind];
+    const items = g.items.map((it) => ({ ...it, base: g.base }));
+    const ws = wb.addWorksheet(name, { properties: { tabColor: { argb: XL.brand } } });
+    const cols = ["Symbol", "Bank", `Total ${g.baseLabel} (Rs arba)`, ...items.flatMap((it) => [`${it.label} (Rs arba)`, `${it.label}: % of ${g.baseLabel}`, `${it.label}: market share %`])];
+    sheetTitle(ws, `${title} — ${m.bs}`, cols.length);
+    ws.getCell(2, 1).value = intro;
+    const H = 4;
+    headerRow(ws, H, cols, { textCols: 2, height: 66 });
+    codes.forEach((code, i) => {
+      const x = ws.getRow(H + 1 + i);
+      x.values = [SCRIP[code] || code, bankName(code), r2(arba(m.banks[code][g.base])), ...items.flatMap((it) => { const f = itemFacts(m, code, it); return f ? [r2(arba(f.amt)), r2(f.mix), r2(f.share)] : [null, null, null]; })];
+      for (let c = 3; c <= cols.length; c++) x.getCell(c).numFmt = (c - 3) % 3 === 0 ? "#,##0.00" : '0.00"%"';
+      if (code === REF) highlight(x, cols.length);
+    });
+    const end = H + codes.length;
+    styleBody(ws, H + 1, end, cols.length, { textCols: 2, band: true });
+    const rr = ws.getRow(end + 2);
+    rr.getCell(2).value = `${R()} rank by amount (1 = largest)`;
+    items.forEach((it, j) => { const f = itemFacts(m, REF, it); rr.getCell(4 + 3 * j).value = f ? `${f.rank} of ${f.n}` : ""; });
+    for (let c = 2; c <= cols.length; c++) { rr.getCell(c).font = { bold: true, size: 10, color: { argb: XL.muted } }; rr.getCell(c).alignment = { horizontal: c === 2 ? "left" : "center" }; }
+    finishSheet(ws, { headerRowNo: H, lastRow: end, ncol: cols.length, xSplit: 2, widths: [9, 28, 13, ...items.flatMap(() => [12, 11, 11])] });
+  };
+  breakdown("Fin deposits", "Deposits by type", "deposit");
+  breakdown("Fin loan products", "Loans by product", "product");
+  breakdown("Fin loan sectors", "Loans by sector", "sector");
+
+  // Profitability and efficiency
+  const ws = wb.addWorksheet("Fin profitability", { properties: { tabColor: { argb: XL.brand } } });
+  const fmt = (mt) => (mt.unit === "arba" ? "#,##0.00" : '0.00"' + (mt.unit === "pp" ? " pp" : "%") + '"');
+  const val = (mt, v) => r2(mt.unit === "arba" ? arba(v) : v);
+  const cols = ["Symbol", "Bank", ...FIN_METRICS.map((mt) => `${mt.label}${mt.unit === "arba" ? " (Rs arba)" : mt.unit === "pp" ? " (pp)" : " (%)"}${mt.note ? ` — ${mt.note}` : ""}`)];
+  sheetTitle(ws, `Profitability & efficiency — ${m.bs}`, cols.length);
+  ws.getCell(2, 1).value = `${intro} · profit and loss is fiscal year to date (${m.fy_month} months)`;
+  const H = 4;
+  headerRow(ws, H, cols, { textCols: 2, height: 66 });
   codes.forEach((code, i) => {
     const x = ws.getRow(H + 1 + i);
-    x.values = [SCRIP[code] || code, state.model?.nameOf[code] || code, ...FIN_METRICS.map((mt) => { const v = finVal(m, code, mt); return v === null ? null : Math.round(v * 100) / 100; })];
+    x.values = [SCRIP[code] || code, bankName(code), ...FIN_METRICS.map((mt) => val(mt, finVal(m, code, mt)))];
     FIN_METRICS.forEach((mt, j) => (x.getCell(3 + j).numFmt = fmt(mt)));
-    if (code === REF) for (let c = 1; c <= cols.length; c++) { x.getCell(c).fill = fill(XL.tint); x.getCell(c).font = { bold: true, size: 10, color: { argb: XL.brandInk } }; }
+    if (code === REF) highlight(x, cols.length);
   });
   const end = H + codes.length;
   styleBody(ws, H + 1, end, cols.length, { textCols: 2, band: true });
   const rr = ws.getRow(end + 2), ar = ws.getRow(end + 3);
-  rr.getCell(2).value = `${R()} rank (1 = best)`; ar.getCell(2).value = "Average of all banks (growth: median)";
-  FIN_METRICS.forEach((mt, j) => {
-    const s = finStats(m, mt);
-    rr.getCell(3 + j).value = s && s.rank ? `${s.rank} of ${s.n}` : "not ranked";
-    ar.getCell(3 + j).value = s ? Math.round(s.avg * 100) / 100 : null; ar.getCell(3 + j).numFmt = fmt(mt);
-  });
+  rr.getCell(2).value = `${R()} rank (1 = best)`; ar.getCell(2).value = "Market average (growth: median)";
+  FIN_METRICS.forEach((mt, j) => { const s = finStats(m, mt); rr.getCell(3 + j).value = s && s.rank ? `${s.rank} of ${s.n}` : "not ranked"; ar.getCell(3 + j).value = s ? val(mt, s.avg) : null; ar.getCell(3 + j).numFmt = fmt(mt); });
   for (const r of [rr, ar]) for (let c = 2; c <= cols.length; c++) { r.getCell(c).font = { bold: true, size: 10, color: { argb: XL.muted } }; r.getCell(c).alignment = { horizontal: c === 2 ? "left" : "center" }; }
   finishSheet(ws, { headerRowNo: H, lastRow: end, ncol: cols.length, xSplit: 2, widths: [9, 28, ...FIN_METRICS.map(() => 14)] });
 
-  // 2. The comparison bank month by month, next to the market average
-  const wt = wb.addWorksheet("Financials trend", { properties: { tabColor: { argb: XL.brand } } });
-  const months = state.fin.months;
-  const tcols = ["Month", "Nepali month", ...FIN_METRICS.flatMap((mt) => [`${R()}: ${label(mt)}`, `Market ${mt.median ? "median" : "average"}`])];
-  sheetTitle(wt, `${RN()} — monthly trend against the market`, tcols.length);
+  // The comparison bank month by month
+  const wt = wb.addWorksheet("Fin trend", { properties: { tabColor: { argb: XL.brand } } });
+  const lines = [itemByKey("deposits"), ...FIN_ITEMS.deposit.items.map((it) => ({ ...it, base: "deposits" })), itemByKey("loans"), ...FIN_ITEMS.product.items.map((it) => ({ ...it, base: "loans" }))];
+  const tcols = ["Month", "Nepali month", ...lines.flatMap((it) => [`${it.label} (Rs arba)`, `${it.label}: market share %`, `${it.label}: rank`]), "Net profit, year to date (Rs arba)", "Net profit: rank"];
+  sheetTitle(wt, `${RN()} — month by month`, tcols.length);
+  wt.getCell(2, 1).value = "Nepal Rastra Bank monthly statistics · amounts in Rs arba · rank among the 20 commercial banks (1 = largest)";
   const TH = 4;
   headerRow(wt, TH, tcols, { textCols: 2, height: 66 });
-  months.forEach((mo, i) => {
-    const x = wt.getRow(TH + 1 + i);
-    x.values = [mo.label, mo.bs, ...FIN_METRICS.flatMap((mt) => { const v = finVal(mo, REF, mt), s = finStats(mo, mt); return [v === null ? null : Math.round(v * 100) / 100, s ? Math.round(s.avg * 100) / 100 : null]; })];
-    FIN_METRICS.forEach((mt, j) => { x.getCell(3 + 2 * j).numFmt = fmt(mt); x.getCell(4 + 2 * j).numFmt = fmt(mt); x.getCell(4 + 2 * j).font = { size: 10, color: { argb: XL.muted } }; });
+  state.fin.months.forEach((mo, i) => {
+    const x = wt.getRow(TH + 1 + i), s = finStats(mo, FIN_METRICS[0]);
+    x.values = [mo.label, mo.bs, ...lines.flatMap((it) => { const f = itemFacts(mo, REF, it); return f ? [r2(arba(f.amt)), r2(f.share), f.rank] : [null, null, null]; }), s ? r2(arba(s.ref)) : null, s?.rank ?? null];
+    for (let c = 3; c <= tcols.length; c++) x.getCell(c).numFmt = (c - 3) % 3 === 0 ? "#,##0.00" : (c - 3) % 3 === 1 ? '0.00"%"' : "0";
   });
-  styleBody(wt, TH + 1, TH + months.length, tcols.length, { textCols: 2, band: true });
-  finishSheet(wt, { headerRowNo: TH, lastRow: TH + months.length, ncol: tcols.length, xSplit: 2, widths: [16, 14, ...FIN_METRICS.flatMap(() => [14, 11])] });
+  styleBody(wt, TH + 1, TH + state.fin.months.length, tcols.length, { textCols: 2, band: true });
+  finishSheet(wt, { headerRowNo: TH, lastRow: TH + state.fin.months.length, ncol: tcols.length, xSplit: 2, widths: [16, 14, ...lines.flatMap(() => [12, 11, 8]), 14, 10] });
 }
 
 function addDetailSheet(wb) {
@@ -1347,7 +1475,7 @@ function addNotesSheet(wb) {
   const ws = wb.addWorksheet("Notes", { properties: { tabColor: { argb: XL.muted } } });
   sheetTitle(ws, "How to read this workbook", 2);
   const notes = [
-    ["Sheets", `Overview: headline figures and ${R()}'s rank, market best/average/worst for every product.\nDeposits / Lending: every bank's rate per product, ${R()} first, base rates above the header.\nBase rate: ranking and a bank-by-bank base rate matrix.\nBanks: base rate, NPL and key rates per bank.\nFinancials: Nepal Rastra Bank's monthly figures for every bank, and the comparison bank's trend against the market.\nAll rates: one row per bank and product, with ranges and premiums, for filtering and pivot tables.`],
+    ["Sheets", `Overview: headline figures and ${R()}'s rank, market best/average/worst for every product.\nDeposits / Lending: every bank's rate per product, ${R()} first, base rates above the header.\nBase rate: ranking and a bank-by-bank base rate matrix.\nBanks: base rate, NPL and key rates per bank.\nFin deposits / Fin loan products / Fin loan sectors / Fin profitability: Nepal Rastra Bank's monthly figures for every bank (amount, % of the bank's total, market share).\nFin trend: the comparison bank month by month.\nAll rates: one row per bank and product, with ranges and premiums, for filtering and pivot tables.`],
     ["Compared rate", "Loans: each bank's lowest rate for the product (1 = cheapest). Deposits: each bank's highest rate (1 = pays most)."],
     [`Vs ${R()} / ${R()} vs average`, `▲ green = ${R()} ahead (cheaper loan or higher deposit rate), ▼ red = ${R()} behind, in percentage points. = means level.`],
     ["Fixed vs variable", "Loan products with \"Fixed\" in the name are fixed rate; all others variable. Special offer rates are used where listed."],
@@ -1431,13 +1559,10 @@ document.addEventListener("click", (e) => {
     t.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === t)));
     return renderGrid(section);
   }
-  if (t.dataset.fgroup) { state.finGroup = t.dataset.fgroup; return renderFinancials(); }
-  if (t.dataset.fsort !== undefined) {
-    const k = t.dataset.fsort || null;
-    if (k && state.finSort === k) state.finDir = state.finDir === "worst" ? "best" : "worst";   // click again: flip
-    else { state.finSort = k; state.finDir = "best"; }
-    return renderFinancials();
-  }
+  if (t.dataset.fsec) { state.finSection = t.dataset.fsec; return renderFinancials(); }
+  if (t.dataset.lview) { state.finLoanView = t.dataset.lview; return renderFinancials(); }
+  if (t.dataset.rankby) { state.finRankBy = t.dataset.rankby; return renderFinancials(); }
+  if (t.dataset.bdsort) { state.finBdSort = { ...(state.finBdSort || {}), [t.dataset.kind]: t.dataset.bdsort }; return renderFinancials(); }
   if (t.dataset.bsort) {
     state.bankSort = state.bankSort === t.dataset.bsort ? null : t.dataset.bsort;
     return renderBanks();
@@ -1449,8 +1574,15 @@ document.addEventListener("click", (e) => {
 });
 $("refresh").addEventListener("click", load);
 $("fin-month").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinancials(); });
-$("fin-trend-metric").addEventListener("change", (e) => { state.finTrend = e.target.value; renderFinTrend(); });
-$("fin-trend-vs").addEventListener("change", (e) => { state.finVs = e.target.value; renderFinTrend(); });
+// Clicking a breakdown or measure row selects it for the all-banks ranking and the monthly table.
+$("fin-breakdown").addEventListener("click", (e) => {
+  if (e.target.closest("button")) return;
+  const tr = e.target.closest("tr[data-bditem], tr[data-fmetric]");
+  if (!tr) return;
+  if (tr.dataset.fmetric) state.finMetric = tr.dataset.fmetric;
+  else state.finItem = { ...(state.finItem || {}), [tr.dataset.kind]: tr.dataset.bditem };
+  renderFinancials();
+});
 $("ref-select").addEventListener("change", (e) => setRef(e.target.value));
 window.addEventListener("resize", fitGrids);
 

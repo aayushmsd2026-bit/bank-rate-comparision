@@ -12,6 +12,7 @@ don't shift anything. Every month is checked before it is kept (see validate()).
 Usage:
   python scripts/nrb_sync.py                 # add any new months (keeps the last --months)
   python scripts/nrb_sync.py --months 24     # how many months of history to keep (default 24)
+  python scripts/nrb_sync.py --rebuild       # re-read every month, e.g. after adding fields
 
 Exit status 1 when the newest month NRB lists cannot be read or fails a check, so a
 scheduled run is reported as failed and nothing wrong is published.
@@ -71,26 +72,30 @@ FIELDS = {
     "commission_income": ("C9", "2.   Commission and Discount"),
     "fx_income": ("C9", "3.   Exchange Flactuation Income"),
     "other_op_income": ("C9", "4.   Other Operating Income"),
+    "dep_others": ("C8", "e. Others"),
     "loans_total_sector": ("C10", "TOTAL sectorwise"),
     "loans_total_product": ("C10", "Total Product wise Loan"),
-    "sec_agriculture": ("C10", "Agricultural and Forest Related"),
-    "sec_energy": ("C10", "Electricity,Gas and Water"),
-    "sec_trade": ("C10", "Wholesaler & Retailer"),
-    "sec_consumption": ("C10", "Consumption Loans"),
-    "sec_tourism": ("C10", "Tourism Service**"),
-    "prod_term": ("C10", "Term Loan"),
-    "prod_home": ("C10", "Residential Personal Home Loan (Up to Rs. 30 million)#"),
-    "prod_real_estate": ("C10", "Real Estate Loan"),
-    "prod_margin": ("C10", "Margin Nature Loan"),
-    "prod_hire_purchase": ("C10", "Hire Purchase Loan"),
-    "prod_deprived": ("C10", "Deprived Sector Loan"),
+    "credit_card": ("C10", "Credit Card"),
 }
-# Labels NRB has used for the same row in other months (matched after normalising spaces/case).
-ALIASES = {
-    "prod_home": ["Residential Personal Home Loan (Up to Rs. 30 million)", "Residential Personal Home Loan (Up to Rs. 15 million)",
-                  "Residential Personal Home Loan (Up to Rs. 15 million)#", "Residential Personal Home Loan"],
-    "sec_tourism": ["Tourism Service", "Tourism Service*"],
-}
+# Loan rows in C10 are matched by pattern (NRB tweaks wording, e.g. the home-loan cap
+# "Up to Rs. 20 million" became "Up to Rs. 30 million"). Stored as prod_<key> / sec_<key>.
+# Other labels NRB has used for a FIELDS row (matched after normalising spaces/case).
+ALIASES = {}
+PRODUCTS = [
+    ("term", r"^term loan"), ("overdraft", r"^overdraft"), ("cash_credit", r"^cash credit"),
+    ("trust_receipt", r"^trust receipt|^import loan"), ("working_capital", r"^short term working capital|^demand loan"),
+    ("home", r"home loan"), ("real_estate", r"^real estate"), ("margin", r"^margin"),
+    ("hire_purchase", r"^hire purchase"), ("deprived", r"^deprived"), ("bills", r"^bills purchased"),
+    ("other", r"^other product"),
+]
+SECTORS = [
+    ("agriculture", r"^agricultur\w* and forest"), ("fishery", r"^fishery"), ("mining", r"^mining"),
+    ("production", r"^agriculture, forestry|production related"), ("construction", r"^construction"),
+    ("energy", r"^electricity"), ("metal", r"^metal"), ("transport", r"^tra\w*s?\.?,? com"),
+    ("trade", r"^wholesale"), ("finance", r"^finance, insurance"), ("tourism", r"^tourism|^hotel"),
+    ("services", r"^other services"), ("consumption", r"^consumption"), ("local_govt", r"^local government"),
+    ("others", r"^others$"),
+]
 REQUIRED = {"total_assets", "total_liabilities", "deposits", "loans", "net_profit", "interest_income", "interest_expense"}
 
 NEPALI_MONTHS = ["Baisakh", "Jestha", "Asar", "Shrawan", "Bhadau", "Asoj", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"]
@@ -203,9 +208,39 @@ def parse_workbook(blob):
             v = row[col]
             if isinstance(v, (int, float)):
                 rec[field] = round(float(v), 2)
+        rec.update(read_loan_breakdown(sheets["C10"], nrb_name))
         if rec:
             banks[code] = rec
     return banks
+
+
+UNMATCHED = set()
+
+
+def read_loan_breakdown(c10, nrb_name):
+    """Every product and sector row for one bank, keyed by PRODUCTS / SECTORS."""
+    header, table = c10
+    if nrb_name not in header:
+        return {}
+    col = header.index(nrb_name)
+    out, section = {}, None
+    for label, row in table.items():   # insertion order = sheet order
+        clean = re.sub(r"[#*]+", "", label).strip()
+        if clean.startswith("sector wise"):
+            section = ("sec", SECTORS); continue
+        if clean.startswith("product wise"):
+            section = ("prod", PRODUCTS); continue
+        if clean.startswith("total") or clean.startswith("collateral"):
+            section = None; continue
+        if section is None:
+            continue
+        key = next((k for k, pat in section[1] if re.search(pat, clean)), None)
+        if key is None:
+            UNMATCHED.add(clean); continue
+        v = row[col] if col < len(row) else None
+        if isinstance(v, (int, float)):
+            out[f"{section[0]}_{key}"] = round(float(v), 2)
+    return out
 
 
 def validate(banks):
@@ -225,6 +260,10 @@ def validate(banks):
         for k in ("loans_total_sector", "loans_total_product"):
             if k in b and b["loans"] > 0 and abs(b[k] - b["loans"]) / b["loans"] > 0.01:
                 problems.append(f"{code}: {k} {b[k]:,.0f} vs loans {b['loans']:,.0f}")
+        for prefix, total in (("prod_", "loans_total_product"), ("sec_", "loans_total_sector")):
+            parts = sum(v for k, v in b.items() if k.startswith(prefix))
+            if total in b and b[total] > 0 and abs(parts - b[total]) / b[total] > 0.01:
+                problems.append(f"{code}: {prefix}* rows add to {parts:,.0f}, total says {b[total]:,.0f}")
         if not (0 < b["deposits"] < ta) or not (0 < b["loans"] < ta):
             problems.append(f"{code}: deposits/loans out of range")
     return problems
@@ -246,9 +285,10 @@ def jumps(prev, cur):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--months", type=int, default=24)
+    ap.add_argument("--rebuild", action="store_true", help="re-read every month (after adding fields)")
     args = ap.parse_args()
 
-    data = json.loads(OUT.read_text()) if OUT.exists() else {"months": []}
+    data = json.loads(OUT.read_text()) if OUT.exists() and not args.rebuild else {"months": []}
     have = {m["id"] for m in data["months"]}
     entries = list_entries(pages=max(1, -(-args.months // 10) + 1))[: args.months]
     if not entries:
@@ -288,6 +328,8 @@ def main():
         added.append(e["id"])
         print(f"[{e['id']}] {month['bs']}: {len(banks)} banks ok")
 
+    if UNMATCHED:
+        print("Loan rows not recognised (add a pattern): " + "; ".join(sorted(UNMATCHED)), file=sys.stderr)
     data["months"].sort(key=lambda m: m["id"])
     data["months"] = data["months"][-args.months:]
     for prev, cur in zip(data["months"], data["months"][1:]):

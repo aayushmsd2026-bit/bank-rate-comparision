@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611070843">
+  <link rel="stylesheet" href="style.css?v=202611070915">
 </head>
 <body>
   <header class="nav">
@@ -53,6 +53,7 @@
 
       <p id="updates" class="updates" hidden></p>
       <div id="kpis" class="kpis kpis-2"></div>
+      <div id="ov-fin" class="ov-fin"></div>
 
       <div class="cards2">
         <article class="card">
@@ -206,26 +207,14 @@
         </div>
       </div>
       <div id="fin-body">
-        <div id="fin-kpis" class="kpis"></div>
-
-        <article class="card trend-card">
-          <header class="card-head chart-head">
-            <div><h2>Trend over time</h2><p id="fin-trend-note"></p></div>
-            <div class="controls">
-              <label class="lbl">Measure <select id="fin-trend-metric"></select></label>
-              <label class="lbl">Also show <select id="fin-trend-vs"></select></label>
-            </div>
-          </header>
-          <div id="fin-trend" class="trend-wrap"></div>
-          <p id="fin-trend-legend" class="legend trend-legend"></p>
-        </article>
-
-        <div class="toolbar"><div class="toggle wide" id="fin-groups" role="group" aria-label="Measures shown"></div></div>
-        <div class="sheet fin-sheet"><table id="fin-table" class="list banks fin"></table></div>
+        <div class="toggle fin-sections" id="fin-sections" role="group" aria-label="Section"></div>
+        <div id="fin-kpis" class="kpis fin-kpis"></div>
+        <article class="card" id="fin-breakdown"></article>
+        <article class="card fin-block" id="fin-trend"></article>
+        <article class="card fin-block" id="fin-rank"></article>
         <p class="legend">
-          <span>Click a column heading to rank banks on it (click again for worst first)</span>
-          <span><span class="rk t1">#1</span> rank: green top third · grey middle · red bottom third</span>
-          <span>Under each figure: the gap to <span class="ref-label"></span></span>
+          <span><span class="rk t1">#1</span> rank among the 20 commercial banks: green top third · grey middle · red bottom third</span>
+          <span>Market share = <span class="ref-label"></span>'s amount ÷ all 20 banks' total</span>
           <span>Figures follow NRB's regulatory reporting, so they differ slightly from banks' published accounts. "Approx." rates are estimated from interest paid and earned</span>
         </p>
       </div>
@@ -245,6 +234,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202611070843"></script>
+  <script src="app.js?v=202611070915"></script>
 </body>
 </html>
