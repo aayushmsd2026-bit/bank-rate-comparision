@@ -12,7 +12,8 @@ An independent project, not endorsed by any bank, BankByaj or Nepal Rastra Bank.
 - **Links to a view.** The address keeps the tab and Financials section, e.g. `…/?bank=NMB#fin/loan` or `#fin/matrix`, so a view can be shared.
 - **Excel.** *Download Excel* on any tab builds a formatted workbook (filters, frozen panes, real numbers) and opens it on the sheet for that tab.
 - **Print.** Printing hides the controls and prints the current view in landscape.
-- **Phones.** On a phone the tabs move to a bar at the bottom of the screen, wide tables scroll sideways (a shadow shows there is more), tapping a cell shows what hovering shows on a computer, and *Add to Home Screen* installs it like an app.
+- **Phones.** On a phone the tabs move to a bar at the bottom of the screen, wide tables scroll sideways (a shadow shows there is more), tapping a cell shows what hovering shows on a computer, and it can be installed as an app.
+- **Install as an app.** In Chrome, Edge and on Android an **Install app** button appears in the header (only when the browser can install it); on iPhone and iPad it shows the Share → *Add to Home Screen* steps. The installed app opens in its own window and still opens without a connection, showing the last figures it saw.
 
 ## Tabs
 
@@ -67,7 +68,7 @@ Heat maps use one ordered scale (kinari → kamenozoki → ai → kon), so darke
 
 | Path | Purpose |
 |---|---|
-| `manifest.webmanifest`, `assets/icon-*.png` | Home-screen app name and icons |
+| `manifest.webmanifest`, `assets/icon-*.png`, `sw.js` | App name, icons and the service worker that makes it installable and usable offline (network first, so it never serves stale files while online) |
 | `index.html`, `style.css`, `app.js` | The whole site (no build step). After changing `style.css` or `app.js`, bump the `?v=` number on their links in `index.html` so browsers don't mix new and cached files |
 | `assets/vendor/exceljs-4.4.0.min.js` | [ExcelJS](https://github.com/exceljs/exceljs) 4.4.0 (MIT), loaded only when Excel is downloaded |
 | `data/snapshot.json` | Hourly backup of BankByaj data (`scripts/sync.mjs`, `.github/workflows/sync.yml`) |

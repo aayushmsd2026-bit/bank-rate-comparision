@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611100827">
+  <link rel="stylesheet" href="style.css?v=202611100840">
 </head>
 <body>
   <header class="nav">
@@ -39,6 +39,7 @@
       </nav>
       <div class="nav-status">
         <span id="source-badge" class="pill">Loading…</span>
+        <button id="install" class="btn-install" type="button" hidden title="Install Bank Tulana as an app on this device"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4-4m4 4l4-4"/><path d="M5 19h14"/></svg><span class="t-long">Install app</span><span class="t-short">Install</span></button>
         <button id="refresh" class="btn-ghost" type="button" title="Reload the latest rates" aria-label="Refresh">↻<span class="t-long"> Refresh</span></button>
       </div>
     </div>
@@ -245,6 +246,11 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202611100827"></script>
+  <dialog id="install-help" class="install-help">
+    <h2>Install Bank Tulana</h2>
+    <p id="install-steps"></p>
+    <button type="button" class="btn-ghost" data-close-install>Got it</button>
+  </dialog>
+  <script src="app.js?v=202611100840"></script>
 </body>
 </html>

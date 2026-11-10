@@ -1923,3 +1923,34 @@ if (window.matchMedia("(hover: none)").matches) {
   });
   window.addEventListener("scroll", () => { tip.hidden = true; }, { passive: true });
 }
+
+// ── Install as an app ────────────────────────────────────────────────────────────────
+// Chrome, Edge and Android offer an install prompt once the page has a manifest and a
+// service worker; the button appears only when installing is possible. iPhones and iPads
+// have no prompt, so the button shows the Share → Add to Home Screen steps instead.
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+(() => {
+  const btn = $("install"), help = $("install-help");
+  const installed = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let deferred = null;
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e; if (!installed()) btn.hidden = false; });
+  window.addEventListener("appinstalled", () => { deferred = null; btn.hidden = true; });
+  if (ios && !installed()) btn.hidden = false;
+  btn.addEventListener("click", async () => {
+    if (deferred) {
+      deferred.prompt();
+      const { outcome } = await deferred.userChoice;
+      if (outcome === "accepted") btn.hidden = true;
+      deferred = null;
+      return;
+    }
+    $("install-steps").innerHTML = ios
+      ? "In Safari, tap the <b>Share</b> button (the square with an arrow), then <b>Add to Home Screen</b>. Bank Tulana then opens from your home screen like an app."
+      : "Open your browser's menu (⋮) and choose <b>Install app</b> or <b>Add to Home screen</b>.";
+    help.showModal();
+  });
+  help.addEventListener("click", (e) => { if (e.target === help || e.target.closest("[data-close-install]")) help.close(); });
+})();

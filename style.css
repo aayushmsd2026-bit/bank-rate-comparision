@@ -421,6 +421,17 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .foot-inner { flex-direction: column; gap: 12px; }
 }
 
+.btn-install { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--brand); background: var(--brand); color: #fff; font: inherit; font-size: .82rem; font-weight: 600; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+.btn-install:hover { background: var(--kon); border-color: var(--kon); }
+.btn-install svg { width: 16px; height: 16px; }
+.btn-install[hidden] { display: none; }
+.install-help { border: 0; border-radius: 16px; padding: 22px; max-width: min(380px, calc(100vw - 32px)); box-shadow: 0 24px 60px -20px rgba(27,45,79,.5); color: var(--ink); background: var(--surface); }
+.install-help::backdrop { background: rgba(27,45,79,.45); }
+.install-help h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.install-help p { margin: 0 0 16px; line-height: 1.5; font-size: .92rem; }
+/* installed app: no browser bar, so leave room for the phone's status bar */
+@media (display-mode: standalone) { .nav { padding-top: env(safe-area-inset-top); } }
+
 /* ---------- laptops: keep the header on one line ---------- */
 @media (min-width: 761px) and (max-width: 1440px) {
   .nav-inner { gap: 18px; }
@@ -454,6 +465,12 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .k-value, .fin-kpis .k-value { font-size: 1.22rem; line-height: 1.2; letter-spacing: -.02em; }
   .kpis-2 .k-value { font-size: 1.6rem; }
   #refresh { padding: 6px 11px; }
+  .btn-install { padding: 5px 9px; font-size: .76rem; gap: 4px; }
+  .btn-install svg { width: 14px; height: 14px; }
+  .nav-status { gap: 6px; }
+  .nav-inner { gap: 10px 12px; }
+  .brand { gap: 10px; }
+  .pill { font-size: .7rem; padding: 3px 8px; }
   .pill { padding: 4px 10px; }
   .k-facts, .k-note { font-size: .76rem; }
   .card-head h2, .chart-head h2 { font-size: 1.02rem; }
@@ -494,7 +511,7 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 @media print {
   @page { size: A4 landscape; margin: 12mm; }
   body { background: #fff; font-size: 10pt; }
-  .nav, .tabs, .tap-tip, .ref-bar, .btn-cta, .btn-ghost, .toolbar, .jump, .controls, .mx-controls, .fin-sections, .toggle, #updates, select { display: none !important; }
+  .nav, .tabs, .tap-tip, .btn-install, .ref-bar, .btn-cta, .btn-ghost, .toolbar, .jump, .controls, .mx-controls, .fin-sections, .toggle, #updates, select { display: none !important; }
   .panel[hidden] { display: none !important; }
   .grid-wrap, .mx2-wrap, .sheet, .bd-wrap, .mx-wrap { height: auto !important; max-height: none !important; overflow: visible !important; }
   .card, .kpi, .sheet, .grid-wrap { box-shadow: none !important; break-inside: avoid; }
