@@ -65,6 +65,8 @@ FIELDS = {
     "staff_expense": ("C9", "3.   Staff Expense"),
     "office_expense": ("C9", "4.   Office Operating Expenses"),
     "provision_for_risk": ("C9", "7.   Provision for Risk"),
+    "staff_bonus": ("C9", "9.   Provision for Staff Bonus"),
+    "income_tax": ("C9", "10.  Provision for Income Tax"),
     "net_profit": ("C9", "12.  Net Profit"),
     "net_loss": ("C9", "9.   Net Loss"),
     "interest_income": ("C9", "1.   Interest Income"),

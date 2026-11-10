@@ -1807,3 +1807,71 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) hiddenAt = Date.now();
   else if (hiddenAt && Date.now() - hiddenAt > AUTO_REFRESH_MS) load();
 });
+
+// ── Hidden: staff bonus estimator ──────────────────────────────────────────────────────
+// Opens when someone types "bonus", visits #bonus, or clicks the logo mark three times.
+// Banks set aside 10% of profit (before bonus and tax) as staff bonus (Bonus Act 2030).
+// NRB reports that provision and staff expense year to date, so "months" = bonus ÷ the
+// average monthly staff expense. Estimates only.
+const crore = (mn) => (mn === null || mn === undefined || !Number.isFinite(mn) ? "—" : `Rs ${(mn / 10).toLocaleString("en-IN", { maximumFractionDigits: mn >= 1000 ? 0 : 1 })} cr`);
+function bonusRow(m, code) {
+  const b = m?.banks[code];
+  if (!b || b.staff_bonus === undefined || !b.staff_expense) return null;
+  // Annual bonus ÷ average monthly staff cost; the year-to-date months cancel out, so this is 12 × bonus ÷ staff.
+  const months = (12 * b.staff_bonus) / b.staff_expense;
+  const pbt = (b.net_profit || 0) - (b.net_loss || 0) + (b.income_tax || 0) + b.staff_bonus;
+  return { pool: b.staff_bonus, months, rate: pbt > 0 ? (100 * b.staff_bonus) / pbt : null, annual: (b.staff_bonus * 12) / m.fy_month };
+}
+function openBonus() {
+  if (!state.fin || !state.model) return;
+  const cur = state.fin.months.at(-1);
+  const last = [...state.fin.months].reverse().find((x) => x.fy_month === 12 && x.id <= cur.id);
+  const fyName = (m) => { const y = Number(m.id.slice(0, 4)); return m.fy_month === 12 ? `${y - 1}/${String(y).slice(2)}` : `${y}/${String(y + 1).slice(2)}`; };
+  const codes = Object.keys(cur.banks);
+  const rows = codes.map((c) => ({ c, now: bonusRow(cur, c), prev: last && last.id !== cur.id ? bonusRow(last, c) : null }))
+    .filter((r) => r.now || r.prev)
+    .sort((a, b) => (b.now?.months ?? -1) - (a.now?.months ?? -1));
+  const mo = (v) => (v === null || v === undefined ? "—" : `${v.toFixed(1)} mo`);
+  const me = rows.find((r) => r.c === REF);
+  const body = rows.map((r, i) => `<tr class="${r.c === REF ? "me" : ""}"><td class="num dim">${i + 1}</td>
+      <td title="${esc(bankName(r.c))}"><b>${esc(SCRIP[r.c] || r.c)}</b></td>
+      <td class="num dim">${(r.now?.rate ?? r.prev?.rate) == null ? "—" : `${Math.round(r.now?.rate ?? r.prev?.rate)}%`}</td>
+      <td class="num">${crore(r.prev?.pool)}</td><td class="num"><b>${mo(r.prev?.months)}</b></td>
+      <td class="num">${crore(r.now?.pool)}</td><td class="num">${crore(r.now?.annual)}</td><td class="num"><b>${mo(r.now?.months)}</b></td></tr>`).join("");
+  let dlg = $("bonus-dlg");
+  if (!dlg) { dlg = document.createElement("dialog"); dlg.id = "bonus-dlg"; dlg.className = "bonus-dlg"; document.body.append(dlg);
+    dlg.addEventListener("click", (e) => { if (e.target === dlg || e.target.closest("[data-close]")) dlg.close(); }); }
+  dlg.innerHTML = `<div class="bonus-in">
+    <header class="card-head"><div><span class="egg-tag">You found it · estimates only</span>
+      <h2>Staff bonus estimator</h2>
+      <p>Under the Bonus Act, banks set aside 10% of profit before tax as staff bonus (the state-owned banks show 5%). Shown as months of each bank's average monthly staff cost.</p></div>
+      <button type="button" class="btn-ghost" data-close aria-label="Close">✕</button></header>
+    ${me ? `<div class="kpis bonus-kpis">
+      <div class="kpi featured"><div class="k-label">${esc(R())} · FY ${last ? esc(fyName(last)) : "—"} (last year)</div><div class="k-value">${mo(me.prev?.months)}</div><div class="k-facts"><span>Bonus pool <b>${crore(me.prev?.pool)}</b></span></div></div>
+      <div class="kpi"><div class="k-label">${esc(R())} · FY ${esc(fyName(cur))} if the trend holds (est.)</div><div class="k-value">≈ ${mo(me.now?.months)}</div><div class="k-facts"><span>${cur.fy_month} month${cur.fy_month > 1 ? "s" : ""} in: <b>${crore(me.now?.pool)}</b> so far</span><span>Full year ≈ <b>${crore(me.now?.annual)}</b></span></div></div></div>` : ""}
+    <div class="bd-wrap"><table class="bd"><thead><tr><th class="num">#</th><th>Bank</th>
+      <th class="num" title="Bonus provision as % of profit before bonus and tax">Bonus rate</th><th class="num">Pool, FY ${last ? esc(fyName(last)) : "—"}</th><th class="num">Months, last year</th>
+      <th class="num">Pool so far (${esc(cur.bs)})</th><th class="num">Full year (est.)</th><th class="num">Months (est.)</th></tr></thead><tbody>${body}</tbody></table></div>
+    <p class="bonus-note"><b>How to read this.</b> Banks are sorted by this year's estimate. "Months" = bonus provision ÷ average monthly staff expense, from NRB's monthly statistics (unaudited, regulatory format).
+      Staff expense includes allowances, provident fund and gratuity, not only basic salary, so in months of basic pay the figure would be higher.
+      This year's estimate assumes profit and staff costs keep their pace so far; ${cur.fy_month <= 3 ? "only a few months are in, so it can move a lot, " : ""}year-end provisions and audit adjustments often change the final number.
+      The law also limits how much one employee can receive, with any excess going to a welfare fund, so individual payouts can be lower. Not financial or HR advice.</p></div>`;
+  if (!dlg.open) dlg.showModal();
+}
+(() => {
+  let typed = "";
+  document.addEventListener("keydown", (e) => {
+    if (e.target.closest?.("input, select, textarea") || e.key.length !== 1) return;
+    typed = (typed + e.key.toLowerCase()).slice(-5);
+    if (typed === "bonus") { typed = ""; openBonus(); }
+  });
+  let clicks = 0, timer;
+  document.querySelector(".brand .mark")?.addEventListener("click", (e) => {
+    clicks++; clearTimeout(timer); timer = setTimeout(() => (clicks = 0), 600);
+    if (clicks >= 3) { e.preventDefault(); e.stopPropagation(); clicks = 0; openBonus(); }
+  }, true);
+  if (location.hash === "#bonus") {
+    const wait = setInterval(() => { if (state.fin && state.model) { clearInterval(wait); openBonus(); } }, 300);
+    setTimeout(() => clearInterval(wait), 20000);
+  }
+})();

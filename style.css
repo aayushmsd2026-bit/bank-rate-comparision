@@ -435,3 +435,17 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .foot p.stamp, .foot a { color: var(--ink); }
 }
 .fin-pick[hidden] { display: none; }
+
+/* Hidden staff bonus estimator */
+.bonus-dlg { border: 0; padding: 0; border-radius: 16px; width: min(1060px, calc(100vw - 32px)); max-height: calc(100vh - 48px); box-shadow: 0 24px 60px -20px rgba(27,45,79,.5); background: var(--surface); color: var(--ink); }
+.bonus-dlg::backdrop { background: rgba(27,45,79,.45); }
+.bonus-in { padding: 18px 20px 20px; }
+.bonus-in .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.egg-tag { display: inline-block; font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #fff; background: var(--shu); border-radius: 999px; padding: 2px 9px; margin-bottom: 6px; }
+.bonus-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px 0 14px; }
+.bonus-dlg .bd-wrap { max-height: 46vh; overflow: auto; }
+.bonus-dlg tr.me td { background: var(--brand-tint); font-weight: 600; }
+.bonus-note { font-size: .78rem; color: var(--muted); line-height: 1.5; margin-top: 12px; }
+@media (max-width: 640px) { .bonus-kpis { grid-template-columns: 1fr; } }
+.bonus-dlg thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.bonus-dlg .bd th, .bonus-dlg .bd td { padding-left: 10px; padding-right: 10px; }
