@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611100902">
+  <link rel="stylesheet" href="style.css?v=202611100909">
 </head>
 <body>
   <header class="nav">
@@ -70,7 +70,7 @@
         <article class="card">
           <header class="card-head">
             <h2>Deposit rate scorecard</h2>
-            <p>Live rates from bankbyaj.com · ranked by each bank's highest rate · 1 = pays most</p>
+            <p>Live rates from bankbyaj.com · ranked by each bank's highest rate · 1 = pays most<span class="phone-only"> · tap a group to open or close it</span></p>
           </header>
           <table id="deposit-score" class="score"></table>
           <p id="deposit-missing" class="missing"></p>
@@ -78,16 +78,16 @@
         <article class="card">
           <header class="card-head">
             <h2>Lending rate scorecard</h2>
-            <p>Live rates from bankbyaj.com · ranked by each bank's lowest rate · 1 = cheapest</p>
+            <p>Live rates from bankbyaj.com · ranked by each bank's lowest rate · 1 = cheapest<span class="phone-only"> · tap a group to open or close it</span></p>
           </header>
           <table id="loan-score" class="score"></table>
           <p id="loan-missing" class="missing"></p>
         </article>
       </div>
       <p class="legend">
-        <span><i class="dot good"></i>Better than market average</span>
-        <span><i class="dot bad"></i>Worse than market average</span>
-        <span><i class="tick"></i>Market average</span>
+        <span class="pos-key"><i class="dot good"></i>Better than market average</span>
+        <span class="pos-key"><i class="dot bad"></i>Worse than market average</span>
+        <span class="pos-key"><i class="tick"></i>Market average</span>
         <span><b class="chg good">▲</b> <span class="ref-label"></span> ahead of market average</span>
         <span><b class="chg bad">▼</b> <span class="ref-label"></span> behind market average</span>
         <span>gaps in percentage points</span>
@@ -257,6 +257,6 @@
     <p id="install-steps"></p>
     <button type="button" class="btn-ghost" data-close-install>Got it</button>
   </dialog>
-  <script src="app.js?v=202611100902"></script>
+  <script src="app.js?v=202611100909"></script>
 </body>
 </html>

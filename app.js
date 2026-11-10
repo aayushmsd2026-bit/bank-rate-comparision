@@ -488,27 +488,38 @@ function renderScorecard(section) {
   const rows = state.rows.filter((r) => r.section === section);
   const shown = rows.filter((r) => r.s.refv !== null);
   const missing = rows.filter((r) => r.s.refv === null);
-  let body = "", seg = null;
-
+  // One <tbody> per product group, so phones can fold groups away (tap the group name).
+  // The group header carries a tally (▲ ahead / ▼ behind the market average) that stays visible when folded.
+  const groups = [];
+  const add = (name, html, diff, lowerIsBetter) => {
+    let g = groups.at(-1);
+    if (!g || g.name !== name) groups.push((g = { name, html: "", up: 0, down: 0, n: 0 }));
+    g.html += html; g.n++;
+    if (Number.isFinite(diff) && Math.abs(diff) >= 0.005) { if (lowerIsBetter ? diff > 0 : diff < 0) g.up++; else g.down++; }
+  };
   if (section === "loan") {
     const base = standing({ ...m.base }, true);
     const r = { s: base, lowerIsBetter: true };
-    body += `<tr class="seg"><td colspan="5">Funding</td></tr>
-      <tr><td class="p-name">Base rate</td><td class="p-ref">${pct(base.refv)}</td><td class="p-rank">${base.rank}<span>/${base.n}</span></td>
-      <td class="p-pos">${positionBar(r)}</td><td class="p-chg">${arrow(base.avg - base.refv, true, "the market average")}</td></tr>`;
+    add("Funding", `<tr><td class="p-name">Base rate</td><td class="p-ref">${pct(base.refv)}</td><td class="p-rank">${base.rank}<span>/${base.n}</span></td>
+      <td class="p-pos">${positionBar(r)}</td><td class="p-chg">${arrow(base.avg - base.refv, true, "the market average")}</td></tr>`, base.avg - base.refv, true);
   }
   for (const r of shown) {
-    if (r.segment !== seg) { seg = r.segment; body += `<tr class="seg"><td colspan="5">${esc(seg)}</td></tr>`; }
     const refCell = r.cells[REF];
-    body += `<tr>
+    add(r.segment, `<tr>
       <td class="p-name">${esc(r.product)}${r.variant === "Fixed" ? '<span class="tag">Fixed</span>' : ""}</td>
       <td class="p-ref">${rateHtml(refCell.range)}</td>
       <td class="p-rank">${r.s.rank}<span>/${r.s.n}</span></td>
       <td class="p-pos">${positionBar(r)}</td>
       <td class="p-chg">${arrow(r.s.avg - r.s.refv, r.lowerIsBetter, "the market average")}</td>
-    </tr>`;
+    </tr>`, r.s.avg - r.s.refv, r.lowerIsBetter);
   }
-  $(`${section}-score`).innerHTML = `<thead><tr><th>Product</th><th>${R()}</th><th>Rank</th><th>Position: best → worst</th><th class="num">vs avg</th></tr></thead><tbody>${body}</tbody>`;
+  state.scoreOpen ||= {};
+  const open = state.scoreOpen[section] || new Set([groups[0]?.name]);
+  state.scoreOpen[section] = open;
+  const body = groups.map((g) => `<tbody class="${open.has(g.name) ? "" : "closed"}">
+      <tr class="seg" data-seg="${esc(g.name)}" data-section="${section}"><td colspan="5"><div class="seg-in"><span class="seg-name">${esc(g.name)}</span>
+        <span class="seg-tally">${g.up ? `<b class="good">▲${g.up}</b>` : ""}${g.down ? `<b class="bad">▼${g.down}</b>` : ""}<span class="seg-n">${g.n} product${g.n > 1 ? "s" : ""}</span></span></div></td></tr>${g.html}</tbody>`).join("");
+  $(`${section}-score`).innerHTML = `<thead><tr><th>Product</th><th>${R()}</th><th>Rank</th><th>Position: best → worst</th><th class="num">vs avg</th></tr></thead>${body}`;
   $(`${section}-missing`).innerHTML = missing.length
     ? `<b>Not offered by ${R()} (${missing.length}):</b> ${missing.map((r) => esc(rowLabel(r))).join(", ")}` : "";
 
@@ -1869,6 +1880,14 @@ function setToggle(group, value) {
 }
 
 document.addEventListener("click", (e) => {
+  // Overview scorecards: tapping a product group folds or unfolds it (phones only; see style.css)
+  const segRow = e.target.closest("tr.seg[data-seg]");
+  if (segRow) {
+    const set = state.scoreOpen[segRow.dataset.section];
+    set.has(segRow.dataset.seg) ? set.delete(segRow.dataset.seg) : set.add(segRow.dataset.seg);
+    segRow.parentElement.classList.toggle("closed", !set.has(segRow.dataset.seg));
+    return;
+  }
   const t = e.target.closest("button, a[data-tab]");
   if (!t) return;
   if (t.dataset.tab) { e.preventDefault(); return showTab(t.dataset.tab); }
@@ -2021,7 +2040,13 @@ function openBonus() {
     ${me ? `<div class="kpis bonus-kpis">
       <div class="kpi featured"><div class="k-label">${esc(R())} · FY ${last ? esc(fyName(last)) : "—"} (last year)</div><div class="k-value">${mo(me.last)}</div><div class="k-facts"><span>Bonus pool <b>${crore(me.prev?.pool)}</b></span><span>${mo(me.prev?.staffMonths)} of total staff cost</span></div></div>
       <div class="kpi"><div class="k-label">${esc(R())} · FY ${esc(fyName(cur))} if the trend holds (est.)</div><div class="k-value">≈ ${mo(me.est)}</div><div class="k-facts"><span>${cur.fy_month} month${cur.fy_month > 1 ? "s" : ""} in: <b>${crore(me.now?.pool)}</b> so far</span><span>Full year ≈ <b>${crore(me.estPool)}</b></span></div></div></div>` : ""}
-    <div class="bd-wrap"><table class="bd"><thead><tr><th class="num">#</th><th>Bank</th>
+    <div class="bonus-list">
+      <div class="bl-head"><span></span><span>Bank</span><span>Last year</span><span>This year (est.)</span></div>
+      ${rows.map((r, i) => `<div class="bl-row ${r.c === REF ? "me" : ""}"><span class="rr-n">${i + 1}</span>
+        <span class="bl-bank"><b>${esc(SCRIP[r.c] || r.c)}</b><small>${(r.now?.rate ?? r.prev?.rate) == null ? "" : `${Math.round(r.now?.rate ?? r.prev?.rate)}% · `}${crore(r.prev?.pool)} → ${crore(r.estPool)}</small></span>
+        <span class="bl-last">${mo(r.last)}</span><span class="bl-est">${mo(r.est)}</span></div>`).join("")}
+    </div>
+    <div class="bd-wrap bonus-table"><table class="bd bonus-t"><thead><tr><th class="num">#</th><th>Bank</th>
       <th class="num" title="Bonus provision as % of profit before bonus and tax">Bonus rate</th>
       <th class="num">Pool, FY ${last ? esc(fyName(last)) : "—"}</th><th class="num">Months, last year</th>
       <th class="num">Pool so far (${esc(cur.bs)})</th><th class="num">Full year (est.)</th><th class="num">Months (est.)</th></tr></thead><tbody>${body}</tbody></table></div>
@@ -2118,7 +2143,7 @@ document.addEventListener("change", (e) => {
 // Phones: wide tables (class "bd" and the Banks table) reflow into one card per row. Each cell
 // gets its column heading as data-l, which the phone stylesheet shows as a small label.
 function labelCells(root = document) {
-  root.querySelectorAll("table.bd, #banks-table").forEach((t) => {
+  root.querySelectorAll("table.bd:not(.bonus-t), #banks-table").forEach((t) => {
     const heads = [...t.querySelectorAll("thead th")].map((th) => ((th.querySelector("button") || th).textContent || "").replace(/[↓↑]/g, "").trim());
     t.querySelectorAll("tbody tr").forEach((tr) => {
       let i = 0;
