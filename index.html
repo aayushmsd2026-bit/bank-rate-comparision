@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611100921">
+  <link rel="stylesheet" href="style.css?v=202611100927">
 </head>
 <body>
   <header class="nav">
@@ -198,14 +198,15 @@
       <div class="head">
         <div>
           <h1>Bank profiles</h1>
-          <p class="sub">Key figures for every commercial bank · click a column to rank best first · <span class="stamp"></span></p>
+          <p class="sub">Key figures for every commercial bank · <span class="desk-text">click a column to rank best first</span><span class="phone-text">use Sort by to rank best first</span> · <span class="stamp"></span></p>
         </div>
         <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
       </div>
       <label class="phone-sort">Sort by <select id="banks-sort" aria-label="Sort banks by"></select></label>
-      <div class="sheet"><table id="banks-table" class="list banks"></table></div>
+      <div class="sheet desk-only"><table id="banks-table" class="list banks"></table></div>
+      <div id="banks-cards" class="bc-list"></div>
       <p class="legend">
-        <span>Under each figure: how that bank compares with <span class="ref-label"></span>, e.g. "4.42 pp below <span class="ref-label"></span>" = that bank's figure is 4.42 percentage points lower than <span class="ref-label"></span>'s (not a change over time)</span>
+        <span><span class="desk-text">Under each figure</span><span class="phone-text">Under each base rate</span>: how that bank compares with <span class="ref-label"></span>, e.g. "4.42 pp below <span class="ref-label"></span>" = that bank's figure is 4.42 percentage points lower than <span class="ref-label"></span>'s (not a change over time)</span>
         <span><span class="star">★</span> Best in market</span>
         <span><span class="fresh">new</span> base rate published this period; others show last period's</span>
         <span>NPL = non-performing (bad) loans as a share of total loans</span>
@@ -257,6 +258,6 @@
     <p id="install-steps"></p>
     <button type="button" class="btn-ghost" data-close-install>Got it</button>
   </dialog>
-  <script src="app.js?v=202611100921"></script>
+  <script src="app.js?v=202611100927"></script>
 </body>
 </html>

@@ -815,6 +815,37 @@ function renderBanks() {
   const avg = metrics.map((mt) => (stats[mt.key] ? `<td class="num">${fmt(mt, stats[mt.key].avg)}</td>` : `<td></td>`)).join("");
   body += `<tr class="avg-row"><td class="bank">Market average</td>${avg}</tr>`;
   $("banks-table").innerHTML = head + `<tbody>${body}</tbody>`;
+
+  // phones: one tidy card per bank — name and base rate on top, then deposit and loan figures as tiles
+  const M = Object.fromEntries(metrics.map((mt) => [mt.key, mt]));
+  const tile = (key, label, code) => {
+    const mt = M[key], v = mt.get(code), st = stats[key];
+    const best = st && v !== null && Math.abs(v - (mt.lower ? st.min : st.max)) < 0.005;
+    return `<div class="bc-tile ${state.bankSort === key ? "on" : ""}"><span>${label}</span><b>${fmt(mt, v, code)}${best ? '<i class="star" title="Best in market">★</i>' : ""}</b></div>`;
+  };
+  const dep = (c) => state.rows.filter((r) => r.section === "deposit" && r.cells[c]).length;
+  const lend = (c) => state.rows.filter((r) => r.section === "loan" && r.cells[c]).length;
+  const baseSt = stats.base;
+  // rank among all banks on the sort measure (ties share a rank), so the comparison bank's place is visible too
+  const trueRank = (code) => {
+    if (!sortMt) return null;
+    const v = sortMt.get(code);
+    if (v === null || v === undefined) return null;
+    const better = (x) => x !== null && x !== undefined && (sortMt.count || !sortMt.lower ? x > v + 1e-9 : x < v - 1e-9);
+    return 1 + m.banks.filter((b) => better(sortMt.get(b.code))).length;
+  };
+  $("banks-cards").innerHTML = list.map((b, i) => {
+    const me = b.code === REF, base = M.base.get(b.code);
+    return `<article class="bc ${me ? "me" : ""}">
+      <header class="bc-head">${sortMt ? `<span class="bc-n" title="Rank among all banks on ${esc(sortMt.label)}">${trueRank(b.code) ?? "—"}</span>` : ""}
+        <div class="bc-name"><b>${esc(SCRIP[b.code] || b.code)}</b><span>${esc(b.name)}${me ? " · comparison bank" : ""}</span></div>
+        <div class="bc-base"><small>Base rate${freshTag(b.code)}</small><b>${fmt(M.base, base)}</b>${!me && baseSt && base !== null && M.base.get(REF) !== null ? `<em>${vsRefWords(base - M.base.get(REF), "base rate").replace(/<[^>]+>/g, "")}</em>` : ""}</div></header>
+      <div class="bc-group"><h4>Deposits</h4><div class="bc-tiles">${tile("fd1", "1-year FD", b.code)}${tile("fdtop", "Best FD", b.code)}${tile("sav", "Savings", b.code)}</div></div>
+      <div class="bc-group"><h4>Loans</h4><div class="bc-tiles">${tile("home", "Home loan from", b.code)}${tile("prem", "Over base rate", b.code)}${tile("npa", "NPL ratio", b.code)}</div></div>
+      <p class="bc-foot">${dep(b.code)} deposit and ${lend(b.code)} loan products listed</p></article>`;
+  }).join("") + `<article class="bc avg"><header class="bc-head"><div class="bc-name"><b>Market average</b><span>all ${m.banks.length} banks</span></div>
+      <div class="bc-base"><small>Base rate</small><b>${fmt(M.base, stats.base?.avg ?? null)}</b></div></header>
+      <div class="bc-group"><div class="bc-tiles">${["fd1", "fdtop", "sav", "home", "prem", "npa"].map((k) => `<div class="bc-tile"><span>${{ fd1: "1-year FD", fdtop: "Best FD", sav: "Savings", home: "Home loan from", prem: "Over base rate", npa: "NPL ratio" }[k]}</span><b>${fmt(M[k], stats[k]?.avg ?? null)}</b></div>`).join("")}</div></div></article>`;
   const sortSel = $("banks-sort");
   if (sortSel) sortSel.innerHTML = `<option value="">A–Z</option>` + metrics.map((mt) => `<option value="${mt.key}" ${state.bankSort === mt.key ? "selected" : ""}>${esc(mt.label)} (best first)</option>`).join("");
 }
@@ -2185,7 +2216,7 @@ document.addEventListener("change", (e) => {
 // Phones: wide tables (class "bd" and the Banks table) reflow into one card per row. Each cell
 // gets its column heading as data-l, which the phone stylesheet shows as a small label.
 function labelCells(root = document) {
-  root.querySelectorAll("#banks-table").forEach((t) => {
+  root.querySelectorAll("#banks-table-none").forEach((t) => {
     const heads = [...t.querySelectorAll("thead th")].map((th) => ((th.querySelector("button") || th).textContent || "").replace(/[↓↑]/g, "").trim());
     t.querySelectorAll("tbody tr").forEach((tr) => {
       let i = 0;
