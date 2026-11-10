@@ -12,6 +12,7 @@ An independent project, not endorsed by any bank, BankByaj or Nepal Rastra Bank.
 - **Links to a view.** The address keeps the tab and Financials section, e.g. `…/?bank=NMB#fin/loan` or `#fin/matrix`, so a view can be shared.
 - **Excel.** *Download Excel* on any tab builds a formatted workbook (filters, frozen panes, real numbers) and opens it on the sheet for that tab.
 - **Print.** Printing hides the controls and prints the current view in landscape.
+- **Deposit and lending views.** *All banks* is the full grid (default on computers). *Head to head* puts the comparison bank next to one bank you pick, product by product, with a tally of where it is ahead (default on phones). *Ranking* shows one product at a time with every bank listed best first; ‹ › step through products.
 - **Phones.** On a phone the tabs move to a bar at the bottom of the screen, wide tables scroll sideways (a shadow shows there is more), tapping a cell shows what hovering shows on a computer, and it can be installed as an app.
 - **Install as an app.** In Chrome, Edge and on Android an **Install app** button appears in the header (only when the browser can install it); on iPhone and iPad it shows the Share → *Add to Home Screen* steps. The installed app opens in its own window and still opens without a connection, showing the last figures it saw.
 

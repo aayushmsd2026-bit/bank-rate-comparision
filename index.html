@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611100840">
+  <link rel="stylesheet" href="style.css?v=202611100842">
 </head>
 <body>
   <header class="nav">
@@ -135,6 +135,7 @@
         </div>
         <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
       </div>
+      <div class="views" id="deposit-views"></div>
       <div class="toolbar">
         <div class="jump" id="deposit-jump"></div>
         <div class="controls">
@@ -148,6 +149,7 @@
           </div>
         </div>
       </div>
+      <div class="alt-view card" id="deposit-alt" hidden></div>
       <div class="grid-wrap"><table id="deposit-table" class="grid"></table></div>
       <p class="legend">
         <span><b class="chg good">▲</b> <span class="ref-label"></span> pays more than this bank</span>
@@ -165,6 +167,7 @@
         </div>
         <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
       </div>
+      <div class="views" id="loan-views"></div>
       <div class="toolbar">
         <div class="jump" id="loan-jump"></div>
         <div class="controls">
@@ -179,6 +182,7 @@
           </div>
         </div>
       </div>
+      <div class="alt-view card" id="loan-alt" hidden></div>
       <div class="grid-wrap"><table id="loan-table" class="grid"></table></div>
       <p class="legend">
         <span><b class="chg good">▲</b> <span class="ref-label"></span> cheaper (lower premium) than this bank</span>
@@ -251,6 +255,6 @@
     <p id="install-steps"></p>
     <button type="button" class="btn-ghost" data-close-install>Got it</button>
   </dialog>
-  <script src="app.js?v=202611100840"></script>
+  <script src="app.js?v=202611100842"></script>
 </body>
 </html>

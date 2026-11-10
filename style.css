@@ -432,6 +432,34 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 /* installed app: no browser bar, so leave room for the phone's status bar */
 @media (display-mode: standalone) { .nav { padding-top: env(safe-area-inset-top); } }
 
+/* phone-friendly views of the rate grids */
+.views { margin: 0 0 12px; }
+.alt-view { padding: 0 0 8px; }
+.alt-head { padding: 16px 18px 10px; display: flex; flex-direction: column; gap: 8px; }
+.alt-pick { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--brand-ink); }
+.alt-pick select, .alt-step select { flex: 1; min-width: 0; font: inherit; font-weight: 600; padding: 7px 10px; border: 1px solid var(--hair); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.alt-step { display: flex; gap: 8px; align-items: center; }
+.alt-step .btn-ghost { min-width: 40px; min-height: 38px; font-size: 1.2rem; padding: 0 10px; }
+.alt-step .btn-ghost:disabled { opacity: .35; }
+.alt-sum { margin: 0; font-size: .82rem; color: var(--muted); }
+.alt-sum .good { color: var(--good); } .alt-sum .bad { color: var(--bad); }
+.vs-t { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.vs-t th { text-align: left; font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); padding: 8px 10px; border-bottom: 1px solid var(--hair); position: sticky; top: 0; background: var(--surface); }
+.vs-t td { padding: 10px 10px; border-bottom: 1px solid var(--hair-soft); vertical-align: middle; }
+.vs-t th:first-child, .vs-t td:first-child { padding-left: 18px; }
+.vs-t th:last-child, .vs-t td:last-child { padding-right: 18px; }
+.vs-t .num { text-align: right; white-space: nowrap; }
+.vs-t td.me { color: var(--brand-ink); font-weight: 700; background: var(--brand-tint); }
+.vs-t th.me { color: var(--brand-ink); }
+.vs-t tr.seg td { padding-top: 16px; padding-bottom: 6px; font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--brand-ink); border-bottom: 0; background: none; }
+.vs-t tr.vs-base td { font-weight: 600; background: var(--paper, #FBFAF5); }
+.vs-t tr.vs-base td.me { background: var(--brand-tint); }
+.vs-name { font-weight: 600; line-height: 1.3; }
+.vs-name .tag, .vs-name .var { margin-left: 6px; }
+.vs-t .to { margin: 0 1px; }
+.alt-view .rank-list { padding: 0 12px; }
+.alt-view .rr-v small { display: block; margin-top: 2px; }
+
 /* ---------- laptops: keep the header on one line ---------- */
 @media (min-width: 761px) and (max-width: 1440px) {
   .nav-inner { gap: 18px; }
@@ -505,13 +533,23 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   /* rate grids: shorter rows */
   .grid td, .grid th { padding-top: 8px; padding-bottom: 8px; }
   .bonus-dlg { max-height: calc(100vh - 24px); }
+  .vs-t { font-size: .8rem; table-layout: fixed; }
+  .vs-t th:nth-child(1) { width: 34%; } .vs-t th:nth-child(2), .vs-t th:nth-child(3) { width: 24%; } .vs-t th:nth-child(4) { width: 18%; }
+  .vs-t td.num:not(:last-child) { white-space: normal; word-break: keep-all; line-height: 1.3; }
+  .vs-t .chg { font-size: .72rem; padding: 2px 4px; }
+  .vs-t th:first-child, .vs-t td:first-child { padding-left: 12px; }
+  .vs-t th:last-child, .vs-t td:last-child { padding-right: 12px; }
+  .vs-t td { padding: 9px 6px; }
+  .alt-head { padding: 14px 12px 8px; }
+  .views .toggle { width: 100%; }
+  .views .toggle button { flex: 1; }
 }
 
 /* ---------- print: one clean page per view, no controls ---------- */
 @media print {
   @page { size: A4 landscape; margin: 12mm; }
   body { background: #fff; font-size: 10pt; }
-  .nav, .tabs, .tap-tip, .btn-install, .ref-bar, .btn-cta, .btn-ghost, .toolbar, .jump, .controls, .mx-controls, .fin-sections, .toggle, #updates, select { display: none !important; }
+  .nav, .tabs, .tap-tip, .btn-install, .ref-bar, .btn-cta, .btn-ghost, .toolbar, .jump, .controls, .views, .alt-head, .mx-controls, .fin-sections, .toggle, #updates, select { display: none !important; }
   .panel[hidden] { display: none !important; }
   .grid-wrap, .mx2-wrap, .sheet, .bd-wrap, .mx-wrap { height: auto !important; max-height: none !important; overflow: visible !important; }
   .card, .kpi, .sheet, .grid-wrap { box-shadow: none !important; break-inside: avoid; }

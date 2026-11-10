@@ -588,6 +588,83 @@ function renderGrid(section) {
   }
   $(`${section}-table`).innerHTML = head + `<tbody>${body}</tbody>`;
   $(`${section}-jump`).innerHTML = segments.map(([name, id]) => `<button type="button" data-jump="${id}">${esc(name)}</button>`).join("");
+  renderAltView(section, rows, mode);
+}
+
+// Phone-friendly views of the same rates: the full grid is 20 banks wide, so on a small screen
+// people can instead compare the reference bank with one other bank (head to head), or see one
+// product with every bank listed top to bottom (ranking). Phones open on head to head.
+const GRID_VIEWS = [["vs", "Head to head"], ["rank", "Ranking"], ["table", "All banks"]];
+function gridView(section) {
+  state.gridView ||= {};
+  return state.gridView[section] || (window.innerWidth <= 760 ? "vs" : "table");
+}
+function vsBank() {
+  const m = state.model;
+  const ok = (c) => c && c !== REF && m.banks.some((b) => b.code === c);
+  if (ok(state.vsBank)) return state.vsBank;
+  let saved = null; try { saved = localStorage.getItem("vsBank"); } catch {}
+  return (state.vsBank = ok(saved) ? saved : orderedBanks()[1]?.code);
+}
+const rowKey = (r) => `${r.segment}|${r.product}|${r.variant || ""}`;
+function renderAltView(section, rows, mode) {
+  const m = state.model, view = gridView(section), alt = $(`${section}-alt`);
+  $(`${section}-views`).innerHTML = `<div class="toggle" role="group" aria-label="View">${GRID_VIEWS.map(([k, l]) => `<button type="button" data-gview="${k}" data-section="${section}" aria-pressed="${k === view}">${l}</button>`).join("")}</div>`;
+  const table = view === "table";
+  alt.hidden = table;
+  const panel = $(`tab-${section}`);
+  panel.querySelector(".grid-wrap").hidden = !table;
+  panel.querySelector(".jump").hidden = view === "rank";
+  if (table) return fitGrids();
+  const isLoan = section === "loan";
+  const show = (c) => (c ? rateHtml({ ...c.range, single: c.value }, mode) : '<span class="na">—</span>');
+  const nameOf = (r) => `${esc(r.product)}${r.variant === "Fixed" ? '<span class="tag">Fixed</span>' : r.variant === "Variable" ? '<span class="var">variable</span>' : ""}`;
+  const bestOf = (r) => (r.lowerIsBetter ? r.s.min : r.s.max);
+  const star = (r, c) => (c && Math.abs(c.value - bestOf(r)) < 0.005 ? '<span class="star" title="Best in market">★</span>' : "");
+
+  if (view === "vs") {
+    const other = vsBank();
+    const banks = orderedBanks().slice(1);
+    const pick = `<label class="alt-pick">${esc(R())} vs <select data-vsbank>${banks.map((b) => `<option value="${esc(b.code)}" ${b.code === other ? "selected" : ""}>${esc(SCRIP[b.code] || b.code)} · ${esc(b.name)}</option>`).join("")}</select></label>`;
+    let body = `<tr class="vs-base"><td>Base rate</td><td class="num">${pct(m.base[REF])}</td><td class="num">${pct(m.base[other])}</td><td class="num">${arrow(m.base[other] - m.base[REF], true, scripOf(other))}</td></tr>`;
+    let seg = null, ahead = 0, behind = 0, even = 0;
+    for (const r of rows) {
+      const a = r.cells[REF], b = r.cells[other];
+      if (!a && !b) continue;
+      if (r.segment !== seg) { seg = r.segment; body += `<tr class="seg" id="${section}-vseg-${esc(seg)}"><td colspan="4">${esc(seg)}</td></tr>`; }
+      if (a && b) { const d = b.value - a.value; if (Math.abs(d) < 0.005) even++; else if (r.lowerIsBetter ? d > 0 : d < 0) ahead++; else behind++; }
+      body += `<tr><td class="vs-name">${nameOf(r)}</td><td class="num me">${show(a)}${star(r, a)}</td><td class="num">${show(b)}${star(r, b)}</td><td class="num">${a && b ? arrow(b.value - a.value, r.lowerIsBetter, scripOf(other)) : ""}</td></tr>`;
+    }
+    const word = isLoan ? ["cheaper", "dearer"] : ["pays more", "pays less"];
+    alt.innerHTML = `<div class="alt-head">${pick}
+        <p class="alt-sum"><b class="good">${ahead}</b> ${esc(R())} ${word[0]} · <b class="bad">${behind}</b> ${word[1]} · <b>${even}</b> level${isLoan && mode === "premium" ? " · premium over each bank's own base rate" : ""}</p></div>
+      <div class="bd-wrap"><table class="vs-t"><thead><tr><th>Product</th><th class="num me">${esc(R())}</th><th class="num">${esc(scripOf(other))}</th><th class="num">Gap</th></tr></thead><tbody>${body}</tbody></table></div>`;
+    return;
+  }
+
+  // ranking: one product, every bank best first
+  const list = rows.filter((r) => Object.keys(r.cells).length);
+  state.rankRow ||= {};
+  let i = list.findIndex((r) => rowKey(r) === state.rankRow[section]);
+  if (i < 0) i = 0;
+  const r = list[i];
+  state.rankRow[section] = rowKey(r);
+  const refc = r.cells[REF];
+  const ranked = Object.entries(r.cells).sort(([, x], [, y]) => (r.lowerIsBetter ? x.value - y.value : y.value - x.value));
+  const opts = list.map((x, j) => `<option value="${j}" ${j === i ? "selected" : ""}>${esc(x.segment)} · ${esc(x.product)}${x.variant === "Fixed" ? " (fixed)" : ""}</option>`).join("");
+  const rowsHtml = ranked.map(([code, c]) => {
+    const rank = 1 + ranked.filter(([, y]) => (r.lowerIsBetter ? y.value < c.value - 0.004 : y.value > c.value + 0.004)).length;
+    const me = code === REF;
+    return `<div class="rank-row ${me ? "me" : ""}"><span class="rr-n">${rank}</span>
+      <span class="rr-bank"><b>${esc(SCRIP[code] || code)}</b> <span>${esc(m.nameOf[code] || code)}</span></span>
+      <span class="rr-v"><b>${show(c)}</b>${star(r, c)}<small>${me ? `${esc(R())}` : refc ? arrow(c.value - refc.value, r.lowerIsBetter, scripOf(code)) : ""}</small></span></div>`;
+  }).join("");
+  alt.innerHTML = `<div class="alt-head"><div class="alt-step">
+      <button type="button" class="btn-ghost" data-rankstep="-1" data-section="${section}" aria-label="Previous product" ${i === 0 ? "disabled" : ""}>‹</button>
+      <select data-rankrow="${section}" aria-label="Product">${opts}</select>
+      <button type="button" class="btn-ghost" data-rankstep="1" data-section="${section}" aria-label="Next product" ${i === list.length - 1 ? "disabled" : ""}>›</button></div>
+      <p class="alt-sum">${isLoan ? "Cheapest" : "Highest"} first · ${esc(R())} ${refc ? `ranks <b>#${r.s.rank}</b> of ${r.s.n}` : "does not offer this"}${isLoan && mode === "premium" ? " · premium over each bank's own base rate" : ""}</p></div>
+    <div class="rank-list">${rowsHtml}</div>`;
 }
 
 // "0.46 pp below the reference bank" — a plain statement of a bank's figure relative to the reference bank's.
@@ -1764,6 +1841,13 @@ document.addEventListener("click", (e) => {
   if (t.dataset.mxgroup) { state.mxGroup = t.dataset.mxgroup; return renderFinancials(); }
   if (t.dataset.mxorder) { state.mxOrder = t.dataset.mxorder; return renderFinancials(); }
   if (t.dataset.finpick) { state.finItem = { ...(state.finItem || {}), [t.dataset.kind]: t.dataset.finpick }; return renderFinancials(); }
+  if (t.dataset.gview) { state.gridView = { ...(state.gridView || {}), [t.dataset.section]: t.dataset.gview }; return renderGrid(t.dataset.section); }
+  if (t.dataset.rankstep) {
+    const sec = t.dataset.section, sel = document.querySelector(`[data-rankrow="${sec}"]`);
+    const j = Number(sel.value) + Number(t.dataset.rankstep);
+    if (sel.options[j]) { sel.value = String(j); sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    return;
+  }
   if (t.dataset.rankby) { state.finRankBy = t.dataset.rankby; return renderFinancials(); }
   if (t.dataset.bdsort) { state.finBdSort = { ...(state.finBdSort || {}), [t.dataset.kind]: t.dataset.bdsort }; return renderFinancials(); }
   if (t.dataset.bsort) {
@@ -1772,6 +1856,11 @@ document.addEventListener("click", (e) => {
   }
   if (t.dataset.jump) {
     const row = $(t.dataset.jump), wrap = row.closest(".grid-wrap");
+    if (wrap.hidden) {   // head-to-head view: jump to the same group there
+      const seg = [...t.closest(".panel").querySelectorAll(".alt-view tr.seg")].find((tr) => tr.textContent.trim() === t.textContent.trim());
+      seg?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     wrap.scrollTo({ top: row.offsetTop - wrap.querySelector("thead").offsetHeight, behavior: "smooth" });
   }
 });
@@ -1954,3 +2043,17 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
   });
   help.addEventListener("click", (e) => { if (e.target === help || e.target.closest("[data-close-install]")) help.close(); });
 })();
+
+// Head-to-head bank and ranking product pickers (deposit and lending tabs).
+document.addEventListener("change", (e) => {
+  const t = e.target;
+  if (t.matches("[data-vsbank]")) {
+    state.vsBank = t.value; try { localStorage.setItem("vsBank", t.value); } catch {}
+    renderGrid("deposit"); renderGrid("loan");
+  } else if (t.matches("[data-rankrow]")) {
+    const sec = t.dataset.rankrow;
+    const rows = state.rows.filter((r) => r.section === sec && Object.keys(r.cells).length);
+    state.rankRow = { ...(state.rankRow || {}), [sec]: rowKey(rows[Number(t.value)]) };
+    renderGrid(sec);
+  }
+});
