@@ -274,6 +274,8 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 
 /* ---------- financials (NRB) ---------- */
 .toggle.wide { flex-wrap: wrap; }
+.fin-pick { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 14px 18px; background: var(--brand-tint); }
+.fin-pick select { font: inherit; font-size: .85rem; padding: 6px 10px; border: 1px solid var(--hair, #DCDDDD); border-radius: 8px; background: var(--surface, #fff); max-width: 100%; }
 .fin-sections { margin-bottom: 16px; }
 .fin-sections button { padding: 8px 18px; font-size: .9rem; }
 .k-sub { font-weight: 500; color: var(--faint); }
@@ -432,3 +434,4 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .foot { background: #fff; color: var(--muted); border-top: 1px solid var(--hair); }
   .foot p.stamp, .foot a { color: var(--ink); }
 }
+.fin-pick[hidden] { display: none; }

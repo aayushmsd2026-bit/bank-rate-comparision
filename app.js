@@ -882,7 +882,7 @@ function renderFinancials() {
   $("fin-source").innerHTML = `Nepal Rastra Bank monthly statistics · position at <b>${esc(m.bs)}</b> (${esc(m.label)}) · profit figures are this fiscal year to date (${m.fy_month} month${m.fy_month > 1 ? "s" : ""}) · <a href="${esc(m.source)}" target="_blank" rel="noopener">NRB file</a>`;
   $("fin-sections").innerHTML = FIN_SECTIONS.map(([k, l]) => `<button type="button" data-fsec="${k}" aria-pressed="${k === state.finSection}">${esc(l)}</button>`).join("");
   document.querySelectorAll(".ref-label").forEach((el) => (el.textContent = R()));
-  $("fin-trend").hidden = false; $("fin-rank").hidden = false;
+  $("fin-trend").hidden = false; $("fin-rank").hidden = false; $("fin-pick").hidden = true;
   if (state.finSection === "matrix") return renderFinMatrix(m);
   if (state.finSection === "profit") return renderFinProfit(m);
   const kind = state.finSection === "deposit" ? "deposit" : state.finLoanView;
@@ -913,7 +913,8 @@ const topProducts = (m, n) => FIN_ITEMS.product.items.filter((it) => !it.memo).m
 function renderFinBreakdown(m, kind) {
   const g = FIN_ITEMS[kind];
   const items = g.items.map((it) => ({ ...it, kind, base: g.base, baseLabel: g.baseLabel }));
-  const sel = items.find((it) => it.key === state.finItem?.[kind]) || items[kind === "deposit" ? 0 : 0];
+  const totalIt = { key: g.base, label: FIN_TOTALS[kind].label, kind, base: g.base, baseLabel: g.baseLabel, total: true };
+  const sel = items.find((it) => it.key === state.finItem?.[kind]) || (state.finItem?.[kind] === g.base ? totalIt : items[0]);
   state.finItem = { ...(state.finItem || {}), [kind]: sel.key };
   const rows = items.map((it) => ({ it, f: itemFacts(m, REF, it) })).filter((r) => r.f);
   const sortKey = state.finBdSort?.[kind] || "amt";
@@ -940,19 +941,31 @@ function renderFinBreakdown(m, kind) {
       <h2>${esc(R())}'s ${kind === "deposit" ? "deposits by type" : kind === "product" ? "loans by product" : "loans by sector"}</h2>
       <p>Largest first · <b>green growth</b> = growing faster than the market · click a row to compare all banks on it</p></div>${switcher}</header>
     <div class="bd-wrap"><table class="bd">${head}<tbody>${body}</tbody></table></div>`;
+  renderFinPicker(kind, items, totalIt, sel);
   renderFinRanking(m, sel);
   renderFinItemTrend(sel);
 }
 
+// Chooses the line item the monthly table and the all-banks ranking show.
+function renderFinPicker(kind, items, totalIt, sel) {
+  const opts = [...items, totalIt];
+  const what = kind === "deposit" ? "deposit type" : kind === "product" ? "loan product" : "lending sector";
+  const control = kind === "deposit"
+    ? `<div class="toggle wide" role="group" aria-label="Deposit type">${opts.map((it) => `<button type="button" data-finpick="${it.key}" data-kind="${kind}" aria-pressed="${it.key === sel.key}">${esc(it.label.replace(/ deposits$/, ""))}</button>`).join("")}</div>`
+    : `<select data-finpick-kind="${kind}" aria-label="${what}">${opts.map((it) => `<option value="${it.key}" ${it.key === sel.key ? "selected" : ""}>${esc(it.label)}</option>`).join("")}</select>`;
+  $("fin-pick").hidden = false;
+  $("fin-pick").innerHTML = `<div><b>Show month by month and across all banks:</b> <span class="dim">choose a ${what}</span></div>${control}`;
+}
+
 // All 20 banks on one line item: by amount, or by how much of their own book it is.
 function renderFinRanking(m, it) {
-  const by = state.finRankBy || "amt";
+  const by = it.total ? "amt" : state.finRankBy || "amt";
   const rows = Object.keys(m.banks).map((c) => ({ c, f: itemFacts(m, c, it) })).filter((r) => r.f);
   rows.sort((a, b) => (by === "amt" ? b.f.amt - a.f.amt : (b.f.mix ?? -1) - (a.f.mix ?? -1)));
   const max = Math.max(...rows.map((r) => (by === "amt" ? r.f.amt : r.f.mix || 0)), 1);
   $("fin-rank").innerHTML = `<header class="card-head chart-head"><div>
       <h2>${esc(it.label)}: all banks</h2><p>${esc(m.bs)} · ${by === "amt" ? "largest amount first" : `largest share of the bank's own ${it.base} first`}</p></div>
-      <div class="toggle" role="group" aria-label="Rank by"><button type="button" data-rankby="amt" aria-pressed="${by === "amt"}">By amount</button><button type="button" data-rankby="mix" aria-pressed="${by === "mix"}">By % of own ${esc(it.base)}</button></div></header>
+      <div class="toggle" role="group" aria-label="Rank by"><button type="button" data-rankby="amt" aria-pressed="${by === "amt"}">By amount</button>${it.total ? "" : `<button type="button" data-rankby="mix" aria-pressed="${by === "mix"}">By % of own ${esc(it.base)}</button>`}</div></header>
     <div class="rank-list">${rows.map((r, i) => {
       const me = r.c === REF, v = by === "amt" ? r.f.amt : r.f.mix || 0;
       return `<div class="rank-row ${me ? "me" : ""}"><span class="rr-n">${i + 1}</span>
@@ -1749,6 +1762,7 @@ document.addEventListener("click", (e) => {
   if (t.dataset.mxmode) { state.mxMode = t.dataset.mxmode; return renderFinancials(); }
   if (t.dataset.mxgroup) { state.mxGroup = t.dataset.mxgroup; return renderFinancials(); }
   if (t.dataset.mxorder) { state.mxOrder = t.dataset.mxorder; return renderFinancials(); }
+  if (t.dataset.finpick) { state.finItem = { ...(state.finItem || {}), [t.dataset.kind]: t.dataset.finpick }; return renderFinancials(); }
   if (t.dataset.rankby) { state.finRankBy = t.dataset.rankby; return renderFinancials(); }
   if (t.dataset.bdsort) { state.finBdSort = { ...(state.finBdSort || {}), [t.dataset.kind]: t.dataset.bdsort }; return renderFinancials(); }
   if (t.dataset.bsort) {
@@ -1762,6 +1776,10 @@ document.addEventListener("click", (e) => {
 });
 $("refresh").addEventListener("click", load);
 $("fin-month").addEventListener("change", (e) => { state.finMonth = e.target.value; renderFinancials(); });
+$("fin-pick").addEventListener("change", (e) => {
+  const k = e.target.dataset.finpickKind;
+  if (k) { state.finItem = { ...(state.finItem || {}), [k]: e.target.value }; renderFinancials(); }
+});
 // Clicking a breakdown or measure row selects it for the all-banks ranking and the monthly table.
 $("fin-breakdown").addEventListener("click", (e) => {
   if (e.target.closest("button")) return;
