@@ -1810,52 +1810,83 @@ document.addEventListener("visibilitychange", () => {
 
 // ── Hidden: staff bonus estimator ──────────────────────────────────────────────────────
 // Opens when someone types "bonus", visits #bonus, or clicks the logo mark three times.
-// Banks set aside 10% of profit (before bonus and tax) as staff bonus (Bonus Act 2030).
-// NRB reports that provision and staff expense year to date, so "months" = bonus ÷ the
-// average monthly staff expense. Estimates only.
+// Banks set aside 10% of profit before bonus and tax as staff bonus (Bonus Act 2030; the
+// state-owned banks 5%). NRB reports that provision and staff expense year to date.
+// Bonus is quoted in months of basic pay, but staff expense also covers allowances, provident
+// fund, gratuity and so on, so months of staff cost are divided by basic pay's share of it.
+// Early months of a year run high, so this year's figure is scaled by how last year's ratio
+// moved from the same month to year end. Estimates only.
 const crore = (mn) => (mn === null || mn === undefined || !Number.isFinite(mn) ? "—" : `Rs ${(mn / 10).toLocaleString("en-IN", { maximumFractionDigits: mn >= 1000 ? 0 : 1 })} cr`);
+const BONUS_SHARE_DEFAULT = 60;   // basic pay as % of staff expense (assumption; user can change it)
 function bonusRow(m, code) {
   const b = m?.banks[code];
   if (!b || b.staff_bonus === undefined || !b.staff_expense) return null;
-  // Annual bonus ÷ average monthly staff cost; the year-to-date months cancel out, so this is 12 × bonus ÷ staff.
-  const months = (12 * b.staff_bonus) / b.staff_expense;
   const pbt = (b.net_profit || 0) - (b.net_loss || 0) + (b.income_tax || 0) + b.staff_bonus;
-  return { pool: b.staff_bonus, months, rate: pbt > 0 ? (100 * b.staff_bonus) / pbt : null, annual: (b.staff_bonus * 12) / m.fy_month };
+  // Annual bonus ÷ average monthly staff cost; the year-to-date months cancel out.
+  return { pool: b.staff_bonus, staffMonths: (12 * b.staff_bonus) / b.staff_expense, rate: pbt > 0 ? (100 * b.staff_bonus) / pbt : null, annual: (b.staff_bonus * 12) / m.fy_month };
+}
+function bonusShare() {
+  try { const v = Number(localStorage.getItem("bonusShare")); if (v >= 20 && v <= 100) return v; } catch {}
+  return BONUS_SHARE_DEFAULT;
 }
 function openBonus() {
   if (!state.fin || !state.model) return;
+  const share = bonusShare() / 100;
   const cur = state.fin.months.at(-1);
-  const last = [...state.fin.months].reverse().find((x) => x.fy_month === 12 && x.id <= cur.id);
+  const last = [...state.fin.months].reverse().find((x) => x.fy_month === 12 && x.id < cur.id);
+  const sameLastYear = last ? monthById(shiftId(cur.id, -12)) : null;   // same point of last year
   const fyName = (m) => { const y = Number(m.id.slice(0, 4)); return m.fy_month === 12 ? `${y - 1}/${String(y).slice(2)}` : `${y}/${String(y + 1).slice(2)}`; };
-  const codes = Object.keys(cur.banks);
-  const rows = codes.map((c) => ({ c, now: bonusRow(cur, c), prev: last && last.id !== cur.id ? bonusRow(last, c) : null }))
-    .filter((r) => r.now || r.prev)
-    .sort((a, b) => (b.now?.months ?? -1) - (a.now?.months ?? -1));
+  const rows = Object.keys(cur.banks).map((c) => {
+    const now = bonusRow(cur, c), prev = last ? bonusRow(last, c) : null, early = sameLastYear ? bonusRow(sameLastYear, c) : null;
+    // this year's pace × (last year's final ÷ last year's pace at the same month)
+    const adj = now && prev && early && early.staffMonths > 0 ? prev.staffMonths / early.staffMonths : 1;
+    const estStaff = now ? now.staffMonths * Math.min(2, Math.max(0.5, adj)) : null;
+    return { c, now, prev, last: prev ? prev.staffMonths / share : null, est: estStaff !== null ? estStaff / share : null, estPool: now && estStaff !== null ? (now.annual * estStaff) / now.staffMonths : null };
+  }).filter((r) => r.now || r.prev).sort((a, b) => (b.est ?? -1) - (a.est ?? -1));
   const mo = (v) => (v === null || v === undefined ? "—" : `${v.toFixed(1)} mo`);
   const me = rows.find((r) => r.c === REF);
   const body = rows.map((r, i) => `<tr class="${r.c === REF ? "me" : ""}"><td class="num dim">${i + 1}</td>
       <td title="${esc(bankName(r.c))}"><b>${esc(SCRIP[r.c] || r.c)}</b></td>
       <td class="num dim">${(r.now?.rate ?? r.prev?.rate) == null ? "—" : `${Math.round(r.now?.rate ?? r.prev?.rate)}%`}</td>
-      <td class="num">${crore(r.prev?.pool)}</td><td class="num"><b>${mo(r.prev?.months)}</b></td>
-      <td class="num">${crore(r.now?.pool)}</td><td class="num">${crore(r.now?.annual)}</td><td class="num"><b>${mo(r.now?.months)}</b></td></tr>`).join("");
+      <td class="num">${crore(r.prev?.pool)}</td><td class="num"><b>${mo(r.last)}</b></td>
+      <td class="num">${crore(r.now?.pool)}</td><td class="num">${crore(r.estPool)}</td><td class="num"><b>${mo(r.est)}</b></td></tr>`).join("");
   let dlg = $("bonus-dlg");
-  if (!dlg) { dlg = document.createElement("dialog"); dlg.id = "bonus-dlg"; dlg.className = "bonus-dlg"; document.body.append(dlg);
-    dlg.addEventListener("click", (e) => { if (e.target === dlg || e.target.closest("[data-close]")) dlg.close(); }); }
+  if (!dlg) {
+    dlg = document.createElement("dialog"); dlg.id = "bonus-dlg"; dlg.className = "bonus-dlg"; document.body.append(dlg);
+    dlg.addEventListener("click", (e) => { if (e.target === dlg || e.target.closest("[data-close]")) dlg.close(); });
+    dlg.addEventListener("change", (e) => {
+      let v = null;
+      if (e.target.id === "bonus-share") v = Number(e.target.value);
+      if (e.target.id === "bonus-actual") {   // calibrate: share = staff-cost months ÷ the payout someone knows
+        const r = bonusRow([...state.fin.months].reverse().find((x) => x.fy_month === 12 && x.id < state.fin.months.at(-1).id), REF);
+        const actual = Number(e.target.value);
+        if (r && actual > 0) v = (100 * r.staffMonths) / actual;
+      }
+      if (v && v >= 20 && v <= 100) { try { localStorage.setItem("bonusShare", v.toFixed(1)); } catch {} }
+      setTimeout(() => { const top = dlg.querySelector(".bd-wrap")?.scrollTop; openBonus(); if (top) dlg.querySelector(".bd-wrap").scrollTop = top; });
+    });
+  }
   dlg.innerHTML = `<div class="bonus-in">
     <header class="card-head"><div><span class="egg-tag">You found it · estimates only</span>
       <h2>Staff bonus estimator</h2>
-      <p>Under the Bonus Act, banks set aside 10% of profit before tax as staff bonus (the state-owned banks show 5%). Shown as months of each bank's average monthly staff cost.</p></div>
+      <p>Under the Bonus Act, banks set aside 10% of profit before tax as staff bonus (the state-owned banks show 5%). Shown in months of basic pay.</p></div>
       <button type="button" class="btn-ghost" data-close aria-label="Close">✕</button></header>
+    <div class="bonus-cal">
+      <label>Basic pay as % of staff cost <input id="bonus-share" type="number" min="20" max="100" step="0.1" value="${(share * 100).toFixed(1).replace(/\.0$/, "")}">%</label>
+      <span class="dim">or calibrate:</span>
+      <label>${esc(R())}'s actual bonus for FY ${last ? esc(fyName(last)) : "—"} <input id="bonus-actual" type="number" min="0.5" max="20" step="0.01" placeholder="e.g. 5.0"> months</label>
+    </div>
     ${me ? `<div class="kpis bonus-kpis">
-      <div class="kpi featured"><div class="k-label">${esc(R())} · FY ${last ? esc(fyName(last)) : "—"} (last year)</div><div class="k-value">${mo(me.prev?.months)}</div><div class="k-facts"><span>Bonus pool <b>${crore(me.prev?.pool)}</b></span></div></div>
-      <div class="kpi"><div class="k-label">${esc(R())} · FY ${esc(fyName(cur))} if the trend holds (est.)</div><div class="k-value">≈ ${mo(me.now?.months)}</div><div class="k-facts"><span>${cur.fy_month} month${cur.fy_month > 1 ? "s" : ""} in: <b>${crore(me.now?.pool)}</b> so far</span><span>Full year ≈ <b>${crore(me.now?.annual)}</b></span></div></div></div>` : ""}
+      <div class="kpi featured"><div class="k-label">${esc(R())} · FY ${last ? esc(fyName(last)) : "—"} (last year)</div><div class="k-value">${mo(me.last)}</div><div class="k-facts"><span>Bonus pool <b>${crore(me.prev?.pool)}</b></span><span>${mo(me.prev?.staffMonths)} of total staff cost</span></div></div>
+      <div class="kpi"><div class="k-label">${esc(R())} · FY ${esc(fyName(cur))} if the trend holds (est.)</div><div class="k-value">≈ ${mo(me.est)}</div><div class="k-facts"><span>${cur.fy_month} month${cur.fy_month > 1 ? "s" : ""} in: <b>${crore(me.now?.pool)}</b> so far</span><span>Full year ≈ <b>${crore(me.estPool)}</b></span></div></div></div>` : ""}
     <div class="bd-wrap"><table class="bd"><thead><tr><th class="num">#</th><th>Bank</th>
-      <th class="num" title="Bonus provision as % of profit before bonus and tax">Bonus rate</th><th class="num">Pool, FY ${last ? esc(fyName(last)) : "—"}</th><th class="num">Months, last year</th>
+      <th class="num" title="Bonus provision as % of profit before bonus and tax">Bonus rate</th>
+      <th class="num">Pool, FY ${last ? esc(fyName(last)) : "—"}</th><th class="num">Months, last year</th>
       <th class="num">Pool so far (${esc(cur.bs)})</th><th class="num">Full year (est.)</th><th class="num">Months (est.)</th></tr></thead><tbody>${body}</tbody></table></div>
-    <p class="bonus-note"><b>How to read this.</b> Banks are sorted by this year's estimate. "Months" = bonus provision ÷ average monthly staff expense, from NRB's monthly statistics (unaudited, regulatory format).
-      Staff expense includes allowances, provident fund and gratuity, not only basic salary, so in months of basic pay the figure would be higher.
-      This year's estimate assumes profit and staff costs keep their pace so far; ${cur.fy_month <= 3 ? "only a few months are in, so it can move a lot, " : ""}year-end provisions and audit adjustments often change the final number.
-      The law also limits how much one employee can receive, with any excess going to a welfare fund, so individual payouts can be lower. Not financial or HR advice.</p></div>`;
+    <p class="bonus-note"><b>How to read this.</b> Sorted by this year's estimate. Months = bonus pool ÷ average monthly staff expense ÷ basic pay's share of staff expense.
+      NRB's staff expense also covers allowances, provident fund, gratuity, festival allowance and other benefits, so it is converted to basic pay with the share above (an assumption; it differs between banks, and calibrating on one bank applies its share to all).
+      This year's figure takes the pace so far and adjusts it by how each bank's ratio moved from ${esc(sameLastYear?.bs || "this point")} to year end last year, because the first months usually run high.
+      Figures are NRB's monthly statistics (unaudited); audit adjustments can change the final pool, and the law limits what one employee can receive, with any excess going to a welfare fund. Not financial or HR advice.</p></div>`;
   if (!dlg.open) dlg.showModal();
 }
 (() => {
