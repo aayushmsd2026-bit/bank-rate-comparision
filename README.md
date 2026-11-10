@@ -27,6 +27,8 @@ An independent project, not endorsed by any bank, BankByaj or Nepal Rastra Bank.
 | **Banks** | One row per bank: base rate, NPL, 1-year and best FD, top savings rate, lowest home loan, home-loan premium, product count | BankByaj |
 | **Bank financials** | Four sections. **Deposits** (current, savings, fixed, call, other — separately) and **Loans** (12 products incl. a credit-card memo line, or 15 sectors): headline cards, a breakdown table (amount, % of the bank's book, market share, rank, one-year growth vs market), a month-by-month table and all banks ranked. **Profit & efficiency**: profit, net interest income, fees, cost to income, annualised returns, approximate cost of deposits, loan yield and spread. **All banks side by side**: every line item × every bank, switchable between amount, market share, % of own book, rank and growth, shaded by rank, with the leader and market total | NRB |
 
+Wording of periods: every change names the months it compares — *"+9.8% since Bhadau 2082"* means the balance at the end of the latest month (Bhadau 2083) is 9.8% higher than at the end of the same month a year earlier; *"+Rs 4.79 arba from Shrawan 2083"* is the change against the month before; profit figures say which months of the fiscal year they cover (e.g. *Shrawan–Bhadau 2083*), and profit growth compares with the same months a year earlier. "All banks" figures are the 20 banks added together.
+
 Conventions used throughout: gaps to the comparison bank are written out ("0.46 pp below NMB") or shown as ▲ (comparison bank ahead) / ▼ (behind); ★ marks the best in market; rank badges are green for the top third, grey for the middle, red for the bottom third.
 
 ## Data and automation

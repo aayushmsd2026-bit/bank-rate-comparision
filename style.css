@@ -699,3 +699,5 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .fin-pick .toggle { flex-wrap: wrap !important; overflow: visible; }
   .fin-pick .toggle button { flex: 1 0 auto; }
 }
+
+.card-head p b.up { color: var(--good); } .card-head p b.down { color: var(--bad); }
