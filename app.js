@@ -1812,12 +1812,13 @@ document.addEventListener("visibilitychange", () => {
 // Opens when someone types "bonus", visits #bonus, or clicks the logo mark three times.
 // Banks set aside 10% of profit before bonus and tax as staff bonus (Bonus Act 2030; the
 // state-owned banks 5%). NRB reports that provision and staff expense year to date.
-// Bonus is quoted in months of basic pay, but staff expense also covers allowances, provident
-// fund, gratuity and so on, so months of staff cost are divided by basic pay's share of it.
+// Bonus is paid in months of gross salary (basic + allowances), but staff expense also covers
+// provident fund, gratuity, festival allowance, leave pay and so on, so months of staff cost are
+// divided by gross monthly salary's share of it.
 // Early months of a year run high, so this year's figure is scaled by how last year's ratio
 // moved from the same month to year end. Estimates only.
 const crore = (mn) => (mn === null || mn === undefined || !Number.isFinite(mn) ? "—" : `Rs ${(mn / 10).toLocaleString("en-IN", { maximumFractionDigits: mn >= 1000 ? 0 : 1 })} cr`);
-const BONUS_SHARE_DEFAULT = 60;   // basic pay as % of staff expense (assumption; user can change it)
+const BONUS_SHARE_DEFAULT = 60;   // gross salary as % of staff expense (assumption; user can change it)
 function bonusRow(m, code) {
   const b = m?.banks[code];
   if (!b || b.staff_bonus === undefined || !b.staff_expense) return null;
@@ -1869,10 +1870,10 @@ function openBonus() {
   dlg.innerHTML = `<div class="bonus-in">
     <header class="card-head"><div><span class="egg-tag">You found it · estimates only</span>
       <h2>Staff bonus estimator</h2>
-      <p>Under the Bonus Act, banks set aside 10% of profit before tax as staff bonus (the state-owned banks show 5%). Shown in months of basic pay.</p></div>
+      <p>Under the Bonus Act, banks set aside 10% of profit before tax as staff bonus (the state-owned banks show 5%). Shown in months of gross salary (basic + allowances), the way it is paid.</p></div>
       <button type="button" class="btn-ghost" data-close aria-label="Close">✕</button></header>
     <div class="bonus-cal">
-      <label>Basic pay as % of staff cost <input id="bonus-share" type="number" min="20" max="100" step="0.1" value="${(share * 100).toFixed(1).replace(/\.0$/, "")}">%</label>
+      <label>Gross salary as % of staff cost <input id="bonus-share" type="number" min="20" max="100" step="0.1" value="${(share * 100).toFixed(1).replace(/\.0$/, "")}">%</label>
       <span class="dim">or calibrate:</span>
       <label>${esc(R())}'s actual bonus for FY ${last ? esc(fyName(last)) : "—"} <input id="bonus-actual" type="number" min="0.5" max="20" step="0.01" placeholder="e.g. 5.0"> months</label>
     </div>
@@ -1883,8 +1884,8 @@ function openBonus() {
       <th class="num" title="Bonus provision as % of profit before bonus and tax">Bonus rate</th>
       <th class="num">Pool, FY ${last ? esc(fyName(last)) : "—"}</th><th class="num">Months, last year</th>
       <th class="num">Pool so far (${esc(cur.bs)})</th><th class="num">Full year (est.)</th><th class="num">Months (est.)</th></tr></thead><tbody>${body}</tbody></table></div>
-    <p class="bonus-note"><b>How to read this.</b> Sorted by this year's estimate. Months = bonus pool ÷ average monthly staff expense ÷ basic pay's share of staff expense.
-      NRB's staff expense also covers allowances, provident fund, gratuity, festival allowance and other benefits, so it is converted to basic pay with the share above (an assumption; it differs between banks, and calibrating on one bank applies its share to all).
+    <p class="bonus-note"><b>How to read this.</b> Sorted by this year's estimate. Months = bonus pool ÷ average monthly staff expense ÷ gross salary's share of staff expense.
+      Besides gross salary (basic + allowances), NRB's staff expense also covers provident fund and gratuity contributions, festival allowance, leave pay, insurance, medical, training and other benefits, so it is converted to gross salary with the share above (an assumption; it differs between banks, and calibrating on one bank applies its share to all).
       This year's figure takes the pace so far and adjusts it by how each bank's ratio moved from ${esc(sameLastYear?.bs || "this point")} to year end last year, because the first months usually run high.
       Figures are NRB's monthly statistics (unaudited); audit adjustments can change the final pool, and the law limits what one employee can receive, with any excess going to a welfare fund. Not financial or HR advice.</p></div>`;
   if (!dlg.open) dlg.showModal();
