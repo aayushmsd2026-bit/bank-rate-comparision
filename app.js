@@ -621,7 +621,7 @@ function renderBaseTab() {
     kpi("Market average", pct(s.avg), `${R()} is ${Math.abs(refv - s.avg).toFixed(2)} pp ${refv >= s.avg ? "above" : "below"} the average · median ${pct(median)}`),
     kpi("Lowest", pct(lowest.v), `${esc(lowest.name)} · ${Math.abs(refv - lowest.v).toFixed(2)} pp below ${R()}`),
     kpi("Highest", pct(highest.v), `${esc(highest.name)} · ${Math.abs(highest.v - refv).toFixed(2)} pp ${highest.v >= refv ? "above" : "below"} ${R()}`),
-    kpi("Published this period", `${fresh.length}<small> of ${list.length}</small>`, fresh.length ? `New base rate from ${esc(fresh.map((b) => b.name).join(", "))}; others show last period's` : "All banks still show last period's base rate"),
+    kpi("Published this period", `${fresh.length}<small> of ${list.length}</small>`, fresh.length === list.length ? "Every bank has published its new base rate" : fresh.length ? (list.length - fresh.length <= fresh.length ? `Still to publish: ${esc(list.filter((b) => !fresh.includes(b)).map((b) => b.name).join(", "))}` : `New base rate from ${esc(fresh.map((b) => b.name).join(", "))}; others show last period's`) : "All banks still show last period's base rate"),
   ].join("");
 
   // Ranked bars: the scale starts just below the lowest rate so differences are visible.
@@ -871,7 +871,7 @@ async function loadFinancials() {
   }
 }
 const finMonth = () => state.fin?.months.find((m) => m.id === state.finMonth) || state.fin?.months.at(-1);
-const FIN_SECTIONS = [["deposit", "Deposits"], ["loan", "Loans"], ["profit", "Profit & efficiency"], ["matrix", "All banks side by side"]];
+const FIN_SECTIONS = [["deposit", "Deposits"], ["loan", "Loans"], ["profit", "Profit & efficiency", "Profit"], ["matrix", "All banks side by side", "All banks"]];
 
 function renderFinancials() {
   const m = finMonth();
@@ -880,7 +880,7 @@ function renderFinancials() {
   state.finLoanView ||= "product";
   $("fin-month").innerHTML = [...state.fin.months].reverse().map((x) => `<option value="${esc(x.id)}" ${x.id === m.id ? "selected" : ""}>${esc(x.bs)} (${esc(x.label)})</option>`).join("");
   $("fin-source").innerHTML = `Nepal Rastra Bank monthly statistics · position at <b>${esc(m.bs)}</b> (${esc(m.label)}) · profit figures are this fiscal year to date (${m.fy_month} month${m.fy_month > 1 ? "s" : ""}) · <a href="${esc(m.source)}" target="_blank" rel="noopener">NRB file</a>`;
-  $("fin-sections").innerHTML = FIN_SECTIONS.map(([k, l]) => `<button type="button" data-fsec="${k}" aria-pressed="${k === state.finSection}">${esc(l)}</button>`).join("");
+  $("fin-sections").innerHTML = FIN_SECTIONS.map(([k, l, sh]) => `<button type="button" data-fsec="${k}" aria-pressed="${k === state.finSection}"><span class="t-long">${esc(l)}</span><span class="t-short">${esc(sh || l)}</span></button>`).join("");
   document.querySelectorAll(".ref-label").forEach((el) => (el.textContent = R()));
   $("fin-trend").hidden = false; $("fin-rank").hidden = false; $("fin-pick").hidden = true;
   if (state.finSection === "matrix") return renderFinMatrix(m);
@@ -1154,7 +1154,7 @@ function renderFinMatrix(m) {
 
   $("fin-breakdown").innerHTML = `<header class="card-head chart-head"><div>
       <h2>All banks side by side · ${esc(m.bs)}</h2>
-      <p>Each row is shaded by rank within that row: darker = larger (or better). ${esc(R())} is pinned first · hover a cell for its full figures</p></div></header>
+      <p>Each row is shaded by rank within that row: darker = larger (or better). ${esc(R())} is pinned first · tap or hover a cell for its full figures</p></div></header>
     <div class="mx-controls">
       <label class="lbl">Show ${tog("mxmode", MX_MODES, mode)}</label>
       <label class="lbl">Rows ${tog("mxgroup", MX_GROUPS, group)}</label>
@@ -1196,7 +1196,8 @@ function fitGrids() {
     if (el.offsetParent === null) return;
     const top = el.getBoundingClientRect().top + window.scrollY;
     const legend = el.nextElementSibling?.offsetHeight || 0;
-    el.style.height = Math.max(440, window.innerHeight - top - legend - 36) + "px";
+    // phones: let the grid fill the screen once scrolled to (minus the bottom tab bar)
+    el.style.height = (window.innerWidth <= 760 ? Math.max(360, window.innerHeight - 96) : Math.max(440, window.innerHeight - top - legend - 36)) + "px";
   });
 }
 
@@ -1907,3 +1908,18 @@ function openBonus() {
     setTimeout(() => clearInterval(wait), 20000);
   }
 })();
+
+// Touch screens have no hover: tapping something with a tooltip shows it briefly.
+if (window.matchMedia("(hover: none)").matches) {
+  const tip = document.createElement("div");
+  tip.className = "tap-tip"; tip.setAttribute("role", "status"); tip.hidden = true;
+  document.body.append(tip);
+  let hide;
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest("td[title], th[title], span[title], b[title], .rk[title]");
+    if (!el || e.target.closest("button, a, select, input, dialog")) return;
+    tip.textContent = el.getAttribute("title"); tip.hidden = false;
+    clearTimeout(hide); hide = setTimeout(() => (tip.hidden = true), 4000);
+  });
+  window.addEventListener("scroll", () => { tip.hidden = true; }, { passive: true });
+}

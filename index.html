@@ -2,7 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1B2D4F">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Bank Tulana">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
   <title>Bank Tulana · Nepal bank rate comparison</title>
   <meta name="description" content="Compare base, loan and deposit rates and monthly NRB financials across Nepal's commercial banks, against any bank you choose.">
   <meta property="og:title" content="Bank Tulana · Nepal bank rate comparison">
@@ -13,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611100758">
+  <link rel="stylesheet" href="style.css?v=202611100827">
 </head>
 <body>
   <header class="nav">
@@ -24,20 +30,20 @@
         <span class="brand-text">Bank Tulana<small>Commercial bank rate comparison</small></span>
       </a>
       <nav class="tabs" role="tablist" aria-label="Sections">
-        <button role="tab" data-tab="summary" aria-selected="true">Overview</button>
-        <button role="tab" data-tab="base" aria-selected="false">Base rate</button>
-        <button role="tab" data-tab="deposit" aria-selected="false">Deposit rates</button>
-        <button role="tab" data-tab="loan" aria-selected="false">Lending rates</button>
-        <button role="tab" data-tab="banks" aria-selected="false">Banks</button>
-        <button role="tab" data-tab="fin" aria-selected="false">Bank financials</button>
+        <button role="tab" data-tab="summary" aria-selected="true"><svg class="t-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13h6V4H4zm10 7h6V4h-6zM4 20h6v-4H4z"/></svg><span class="t-long">Overview</span><span class="t-short">Overview</span></button>
+        <button role="tab" data-tab="base" aria-selected="false"><svg class="t-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18l5-6 4 3 7-9"/><path d="M15 6h5v5"/></svg><span class="t-long">Base rate</span><span class="t-short">Base rate</span></button>
+        <button role="tab" data-tab="deposit" aria-selected="false"><svg class="t-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h16v9H4z"/><path d="M12 3l8 5H4z"/><path d="M8 13v3m4-3v3m4-3v3"/></svg><span class="t-long">Deposit rates</span><span class="t-short">Deposits</span></button>
+        <button role="tab" data-tab="loan" aria-selected="false"><svg class="t-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg><span class="t-long">Lending rates</span><span class="t-short">Lending</span></button>
+        <button role="tab" data-tab="banks" aria-selected="false"><svg class="t-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span class="t-long">Banks</span><span class="t-short">Banks</span></button>
+        <button role="tab" data-tab="fin" aria-selected="false"><svg class="t-ic" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V10m7 10V4m7 16v-7"/></svg><span class="t-long">Bank financials</span><span class="t-short">Financials</span></button>
       </nav>
       <div class="nav-status">
         <span id="source-badge" class="pill">Loading…</span>
-        <button id="refresh" class="btn-ghost" type="button" title="Reload the latest rates">↻ Refresh</button>
+        <button id="refresh" class="btn-ghost" type="button" title="Reload the latest rates" aria-label="Refresh">↻<span class="t-long"> Refresh</span></button>
       </div>
     </div>
     <div class="ref-bar">
-      <label class="ref-pick">Comparing every figure against <select id="ref-select" aria-label="Bank to compare against"></select></label>
+      <label class="ref-pick"><span class="t-long">Comparing every figure against</span><span class="t-short">Compare with</span> <select id="ref-select" aria-label="Bank to compare against"></select></label>
       <span class="ref-hint">Change it any time to see every page from another bank's point of view</span>
     </div>
   </header>
@@ -113,7 +119,7 @@
         <header class="card-head">
           <h2>Base rate matrix</h2>
           <p>Each cell = <b>row bank's base rate − column bank's base rate</b>, in percentage points. Read along <span class="ref-label"></span>'s row to see how far above or below each bank <span class="ref-label"></span> is; <span class="ref-label"></span>'s column shows the reverse.
-            <span class="key-sw low"></span> row bank lower <span class="key-sw high"></span> row bank higher · hover a cell for the full sentence</p>
+            <span class="key-sw low"></span> row bank lower <span class="key-sw high"></span> row bank higher · tap or hover a cell for the full sentence</p>
         </header>
         <div class="mx-wrap"><table id="base-matrix" class="mx"></table></div>
       </article>
@@ -146,7 +152,7 @@
         <span><b class="chg good">▲</b> <span class="ref-label"></span> pays more than this bank</span>
         <span><b class="chg bad">▼</b> <span class="ref-label"></span> pays less than this bank</span>
         <span><span class="star">★</span> Highest in market</span>
-        <span>Column headings are NEPSE symbols (hover for the full name; RBB is not listed) · gap compares highest rates, in pp · hover a cell for product names</span>
+        <span>Column headings are NEPSE symbols (tap or hover for the full name; RBB is not listed) · gap compares highest rates, in pp · tap or hover a cell for product names</span>
       </p>
     </section>
     <!-- Lending -->
@@ -177,7 +183,7 @@
         <span><b class="chg good">▲</b> <span class="ref-label"></span> cheaper (lower premium) than this bank</span>
         <span><b class="chg bad">▼</b> <span class="ref-label"></span> dearer (higher premium) than this bank</span>
         <span><span class="star">★</span> Lowest in market</span>
-        <span>Column headings are NEPSE symbols (hover for the full name; RBB is not listed) · "0.46 pp below <span class="ref-label"></span>" = that bank's base rate is 0.46 percentage points lower than <span class="ref-label"></span>'s · hover a cell for product names</span>
+        <span>Column headings are NEPSE symbols (tap or hover for the full name; RBB is not listed) · "0.46 pp below <span class="ref-label"></span>" = that bank's base rate is 0.46 percentage points lower than <span class="ref-label"></span>'s · tap or hover a cell for product names</span>
       </p>
     </section>
 
@@ -239,6 +245,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=202611100758"></script>
+  <script src="app.js?v=202611100827"></script>
 </body>
 </html>

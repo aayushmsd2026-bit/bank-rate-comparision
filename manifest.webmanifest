@@ -1,0 +1,14 @@
+{
+  "name": "Bank Tulana · Nepal bank rate comparison",
+  "short_name": "Bank Tulana",
+  "description": "Live deposit, lending and base rates of Nepal's commercial banks, plus NRB monthly financials, compared side by side.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#FBFAF5",
+  "theme_color": "#1B2D4F",
+  "icons": [
+    { "src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

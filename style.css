@@ -421,11 +421,80 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   .foot-inner { flex-direction: column; gap: 12px; }
 }
 
+/* ---------- laptops: keep the header on one line ---------- */
+@media (min-width: 761px) and (max-width: 1440px) {
+  .nav-inner { gap: 18px; }
+  .brand-sep, .brand-text small { display: none; }
+  .tabs button { padding: 0 11px; font-size: .9rem; }
+  #refresh .t-long { display: none; }
+}
+
+/* ---------- phones ---------- */
+.t-ic, .t-short { display: none; }
+.tap-tip { position: fixed; left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 60; background: var(--kon); color: #fff; font-size: .85rem; line-height: 1.4; padding: 10px 14px; border-radius: 12px; box-shadow: 0 10px 30px -10px rgba(27,45,79,.6); }
+@media (max-width: 760px) {
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .t-long { display: none; }
+  .t-short { display: inline; }
+  /* bottom tab bar */
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: grid; grid-template-columns: repeat(6, 1fr); gap: 0; margin: 0; padding: 4px 2px env(safe-area-inset-bottom); background: var(--surface); border-top: 1px solid var(--hair); box-shadow: 0 -4px 16px -8px rgba(27,45,79,.25); overflow: visible; order: initial; width: auto; }
+  .tabs button { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 0 6px; min-height: 56px; font-size: .66rem; font-weight: 600; border-bottom: 0; border-top: 2px solid transparent; letter-spacing: 0; }
+  .tabs button[aria-selected="true"] { border-bottom: 0; border-top-color: var(--brand); color: var(--brand-ink); }
+  .t-ic { display: block; width: 22px; height: 22px; }
+  .nav-inner { padding-bottom: 10px; }
+  .ref-bar { padding: 8px 16px; }
+  .ref-pick { gap: 8px; }
+  /* 16px stops iOS zooming into form fields */
+  select, input { font-size: 16px !important; }
+  #fin-month { padding: 6px 10px; border: 1px solid var(--hair); border-radius: 8px; background: var(--surface); max-width: 100%; }
+  h1 { font-size: 1.6rem; }
+  .head { gap: 12px; }
+  .btn-cta { padding: 8px 14px; font-size: .85rem; box-shadow: none; }
+  /* cards */
+  .k-value, .fin-kpis .k-value { font-size: 1.22rem; line-height: 1.2; letter-spacing: -.02em; }
+  .kpis-2 .k-value { font-size: 1.6rem; }
+  #refresh { padding: 6px 11px; }
+  .pill { padding: 4px 10px; }
+  .k-facts, .k-note { font-size: .76rem; }
+  .card-head h2, .chart-head h2 { font-size: 1.02rem; }
+  /* toggles and section switches: one line, swipe sideways */
+  .toggle, .fin-sections { display: flex; max-width: 100%; overflow-x: auto; flex-wrap: nowrap !important; scrollbar-width: none; }
+  .toggle::-webkit-scrollbar, .fin-sections::-webkit-scrollbar { display: none; }
+  .toggle button, .fin-sections button { white-space: nowrap; flex: none; min-height: 36px; }
+  .fin-sections button { padding: 8px 14px; }
+  /* wide tables: compact, with a shadow on the side that has more to swipe to */
+  .bd th, .bd td { padding: 8px 8px; font-size: .8rem; }
+  .bd th:first-child, .bd td:first-child { padding-left: 12px; }
+  .trend-t .mixbar, .bd .mixbar { display: none; }
+  .bd-wrap, .cards2 .card, .grid-wrap {
+    background:
+      linear-gradient(to right, var(--surface) 30%, rgba(255,255,255,0)) left / 24px 100% no-repeat local,
+      linear-gradient(to left, var(--surface) 30%, rgba(255,255,255,0)) right / 24px 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgba(27,45,79,.18), transparent) left / 10px 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgba(27,45,79,.18), transparent) right / 10px 100% no-repeat scroll;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* scorecards: drop the position bar, keep rank and vs average */
+  .score th:nth-child(4), .score td.p-pos { display: none; }
+  .score td { padding: 9px 6px; }
+  .score { font-size: .84rem; }
+  .score .p-name { white-space: normal; line-height: 1.25; }
+  .score .p-ref { white-space: normal; }
+  /* all-banks rankings */
+  .rank-row { font-size: .82rem; gap: 8px; }
+  .rr-bank span { display: block; font-size: .7rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rr-bank { min-width: 0; }
+  .rr-v small { white-space: normal; max-width: 150px; margin-left: auto; }
+  /* rate grids: shorter rows */
+  .grid td, .grid th { padding-top: 8px; padding-bottom: 8px; }
+  .bonus-dlg { max-height: calc(100vh - 24px); }
+}
+
 /* ---------- print: one clean page per view, no controls ---------- */
 @media print {
   @page { size: A4 landscape; margin: 12mm; }
   body { background: #fff; font-size: 10pt; }
-  .nav, .ref-bar, .btn-cta, .btn-ghost, .toolbar, .jump, .controls, .mx-controls, .fin-sections, .toggle, #updates, select { display: none !important; }
+  .nav, .tabs, .tap-tip, .ref-bar, .btn-cta, .btn-ghost, .toolbar, .jump, .controls, .mx-controls, .fin-sections, .toggle, #updates, select { display: none !important; }
   .panel[hidden] { display: none !important; }
   .grid-wrap, .mx2-wrap, .sheet, .bd-wrap, .mx-wrap { height: auto !important; max-height: none !important; overflow: visible !important; }
   .card, .kpi, .sheet, .grid-wrap { box-shadow: none !important; break-inside: avoid; }
