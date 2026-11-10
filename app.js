@@ -1027,10 +1027,19 @@ function renderFinBreakdown(m, kind) {
     (total ? `<tr class="bd-total"><td>${esc(FIN_TOTALS[kind].label)}</td><td class="num"><b>${fmtArba(total.amt)}</b></td><td class="num">100%</td><td class="num">${fmtPct(total.share, 2)}</td><td class="num">${rankChip(total.rank, total.n)} <span class="dim">of ${total.n}</span></td><td class="num">${fmtSigned(total.growth)}</td><td class="num dim">${fmtSigned(total.mktGrowth)}</td><td class="num dim">100%</td></tr>` : "");
   const switcher = state.finSection === "loan" ? `<div class="toggle" role="group" aria-label="Break loans down by">
       <button type="button" data-lview="product" aria-pressed="${kind === "product"}">By product</button><button type="button" data-lview="sector" aria-pressed="${kind === "sector"}">By sector</button></div>` : "";
+  // phones: one compact row per item instead of the wide table
+  const growthTxt = (f) => (f.growth === null ? "" : `<span class="m-g ${f.mktGrowth !== null ? (f.growth >= f.mktGrowth ? "up" : "down") : ""}">${fmtSigned(f.growth)}</span> in a year${f.mktGrowth !== null ? ` <span class="dim">· market ${fmtSigned(f.mktGrowth)}</span>` : ""}`);
+  const mrows = rows.map(({ it, f }) => `<div class="m-row ${it.key === sel.key ? "sel" : ""}" role="button" tabindex="0" data-bditem="${it.key}" data-kind="${kind}">
+      <div class="m-top"><span class="m-name">${esc(it.label)}${it.memo ? '<small>memo, overlaps other products</small>' : ""}</span><b class="m-val">${fmtArba(f.amt)}</b></div>
+      <div class="m-sub">${fmtPct(f.mix)} of ${esc(R())}'s ${g.baseLabel} · ${fmtPct(f.share, 2)} share · rank ${rankChip(f.rank, f.n)} of ${f.n}</div>
+      <div class="m-sub">${growthTxt(f)}</div></div>`).join("") +
+    (total ? `<div class="m-row m-total"><div class="m-top"><span class="m-name">${esc(FIN_TOTALS[kind].label)}</span><b class="m-val">${fmtArba(total.amt)}</b></div>
+      <div class="m-sub">${fmtPct(total.share, 2)} share · rank ${rankChip(total.rank, total.n)} of ${total.n}</div><div class="m-sub">${growthTxt(total)}</div></div>` : "");
   $("fin-breakdown").innerHTML = `<header class="card-head chart-head"><div>
       <h2>${esc(R())}'s ${kind === "deposit" ? "deposits by type" : kind === "product" ? "loans by product" : "loans by sector"}</h2>
-      <p>Largest first · <b>green growth</b> = growing faster than the market · click a row to compare all banks on it</p></div>${switcher}</header>
-    <div class="bd-wrap"><table class="bd">${head}<tbody>${body}</tbody></table></div>`;
+      <p>Largest first · <b>green growth</b> = growing faster than the market · tap or click a row to compare all banks on it</p></div>${switcher}</header>
+    <div class="bd-wrap desk-only"><table class="bd">${head}<tbody>${body}</tbody></table></div>
+    <div class="m-list">${mrows}</div>`;
   renderFinPicker(kind, items, totalIt, sel);
   renderFinRanking(m, sel);
   renderFinItemTrend(sel);
@@ -1085,9 +1094,19 @@ function renderFinItemTrend(it) {
       <td class="num ${ch === null ? "" : ch >= 0 ? "up" : "down"}">${ch === null ? "—" : `${ch >= 0 ? "+" : "−"}${fmtArba(Math.abs(ch)).replace("Rs ", "Rs ")}`}</td>
       <td class="num">${f ? fmtPct(f.mix) : "—"}</td><td class="num">${f ? fmtPct(f.share, 2) : "—"}</td><td class="num">${f ? `#${f.rank}` : "—"}</td></tr>`;
   }).join("");
+  const mtrend = ids.map((id, i) => {
+    const m = monthById(id);
+    const [yy, mo] = id.split("-").map(Number);
+    if (!m) return `<div class="m-row m-gap"><div class="m-top"><span class="m-name">${NEPALI_MONTH_NAMES[mo - 1]} ${yy}</span><span class="dim">PDF only</span></div></div>`;
+    const f = itemFacts(m, REF, it), pf = monthById(ids[i + 1]) ? itemFacts(monthById(ids[i + 1]), REF, it) : null;
+    const ch = f && pf ? f.amt - pf.amt : null;
+    return `<div class="m-row ${id === state.finMonth ? "sel" : ""}"><div class="m-top"><span class="m-name">${esc(m.bs)}</span><b class="m-val">${f ? fmtArba(f.amt) : "—"}</b></div>
+      <div class="m-sub">${ch === null ? "" : `<span class="m-g ${ch >= 0 ? "up" : "down"}">${ch >= 0 ? "+" : "−"}${fmtArba(Math.abs(ch)).replace("Rs ", "")}</span> in the month · `}${f ? `${fmtPct(f.share, 2)} share · #${f.rank}` : ""}</div></div>`;
+  }).join("");
   $("fin-trend").innerHTML = `<header class="card-head"><h2>${esc(R())} · ${esc(it.label)}: month by month</h2>
       <p>Last 12 months, newest first · change is against the month before</p></header>
-    <div class="bd-wrap"><table class="bd trend-t"><thead><tr><th>Month</th><th class="num">Amount</th><th class="num">Change in month</th><th class="num">% of ${esc(R())}'s ${esc(it.base)}</th><th class="num">Market share</th><th class="num">Rank among banks</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    <div class="m-list">${mtrend}</div>
+    <div class="bd-wrap desk-only"><table class="bd trend-t"><thead><tr><th>Month</th><th class="num">Amount</th><th class="num">Change in month</th><th class="num">% of ${esc(R())}'s ${esc(it.base)}</th><th class="num">Market share</th><th class="num">Rank among banks</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 const NEPALI_MONTH_NAMES = ["Baisakh", "Jestha", "Asar", "Shrawan", "Bhadau", "Asoj", "Kartik", "Mangsir", "Poush", "Magh", "Falgun", "Chaitra"];
 
@@ -1113,8 +1132,16 @@ function renderFinProfit(m) {
       <td class="num">${finFmt(mt, s.avg)}${mt.median ? ' <span class="dim">(median)</span>' : ""}</td>
       <td class="num">${s.best ? `${finFmt(mt, s.best[1])} <span class="dim">${esc(SCRIP[s.best[0]] || s.best[0])}</span>` : "—"}</td></tr>`;
   }).join("");
-  $("fin-breakdown").innerHTML = `<header class="card-head"><h2>${esc(R())}'s profitability and efficiency</h2><p>${m.fy_month}-month year-to-date figures · rates marked annualised are scaled to a full year · click a row to compare all banks</p></header>
-    <div class="bd-wrap"><table class="bd"><thead><tr><th>Measure</th><th class="num">${esc(R())}</th><th class="num">Rank among banks</th><th class="num">Market average</th><th class="num">Best bank</th></tr></thead><tbody>${body}</tbody></table></div>`;
+  const mprof = FIN_METRICS.map((mt) => {
+    const s = finStats(m, mt);
+    if (!s) return "";
+    return `<div class="m-row ${mt.key === sel.key ? "sel" : ""}" role="button" tabindex="0" data-fmetric="${mt.key}">
+      <div class="m-top"><span class="m-name">${esc(mt.label)}${mt.note ? `<small>${esc(mt.note)}</small>` : ""}</span><b class="m-val">${finFmt(mt, s.ref)}</b></div>
+      <div class="m-sub">${s.rank ? `rank ${rankChip(s.rank, s.n)} of ${s.n} · ` : ""}market ${mt.median ? "median" : "average"} ${finFmt(mt, s.avg)}${s.best ? ` · best ${finFmt(mt, s.best[1])} ${esc(SCRIP[s.best[0]] || s.best[0])}` : ""}</div></div>`;
+  }).join("");
+  $("fin-breakdown").innerHTML = `<header class="card-head"><h2>${esc(R())}'s profitability and efficiency</h2><p>${m.fy_month}-month year-to-date figures · rates marked annualised are scaled to a full year · tap or click a row to compare all banks</p></header>
+    <div class="m-list">${mprof}</div>
+    <div class="bd-wrap desk-only"><table class="bd"><thead><tr><th>Measure</th><th class="num">${esc(R())}</th><th class="num">Rank among banks</th><th class="num">Market average</th><th class="num">Best bank</th></tr></thead><tbody>${body}</tbody></table></div>`;
 
   // ranking + trend for the selected measure
   const rows = Object.keys(m.banks).map((c) => ({ c, v: finVal(m, c, sel) })).filter((r) => r.v !== null);
@@ -1127,8 +1154,16 @@ function renderFinProfit(m) {
       <span class="rr-bar">${lo < 0 ? `<i class="zero" style="left:${((-lo / span) * 100).toFixed(1)}%"></i>` : ""}<i class="${r.v < 0 ? "neg" : ""}" style="left:${(((Math.min(0, r.v) - lo) / span) * 100).toFixed(1)}%;width:${((Math.abs(r.v) / span) * 100).toFixed(1)}%"></i></span>
       <span class="rr-v"><b>${finFmt(sel, r.v)}</b></span></div>`).join("")}</div>`;
   const ids = Array.from({ length: 13 }, (_, i) => shiftId(state.fin.months.at(-1).id, -i));
+  const mpt = ids.map((id) => {
+    const mm = monthById(id); const [yy, mo] = id.split("-").map(Number);
+    if (!mm) return `<div class="m-row m-gap"><div class="m-top"><span class="m-name">${NEPALI_MONTH_NAMES[mo - 1]} ${yy}</span><span class="dim">PDF only</span></div></div>`;
+    const s = finStats(mm, sel);
+    return `<div class="m-row ${id === state.finMonth ? "sel" : ""}"><div class="m-top"><span class="m-name">${esc(mm.bs)}</span><b class="m-val">${s ? finFmt(sel, s.ref) : "—"}</b></div>
+      <div class="m-sub">${s ? `market ${sel.median ? "median" : "average"} ${finFmt(sel, s.avg)}${s.rank ? ` · #${s.rank} of ${s.n}` : ""}` : ""}</div></div>`;
+  }).join("");
   $("fin-trend").innerHTML = `<header class="card-head"><h2>${esc(R())} · ${esc(sel.label)}: month by month</h2><p>Last 12 months, newest first · profit items restart each Shrawan (new fiscal year)</p></header>
-    <div class="bd-wrap"><table class="bd trend-t"><thead><tr><th>Month</th><th class="num">${esc(R())}</th><th class="num">Market ${sel.median ? "median" : "average"}</th><th class="num">Rank among banks</th></tr></thead><tbody>${ids.map((id) => {
+    <div class="m-list">${mpt}</div>
+    <div class="bd-wrap desk-only"><table class="bd trend-t"><thead><tr><th>Month</th><th class="num">${esc(R())}</th><th class="num">Market ${sel.median ? "median" : "average"}</th><th class="num">Rank among banks</th></tr></thead><tbody>${ids.map((id) => {
       const mm = monthById(id); const [yy, mo] = id.split("-").map(Number);
       if (!mm) return `<tr class="gap-row"><td>${NEPALI_MONTH_NAMES[mo - 1]} ${yy}</td><td colspan="3" class="dim">Not published by NRB as a spreadsheet (PDF only)</td></tr>`;
       const s = finStats(mm, sel);
@@ -1943,7 +1978,7 @@ $("fin-pick").addEventListener("change", (e) => {
 // Clicking a breakdown or measure row selects it for the all-banks ranking and the monthly table.
 $("fin-breakdown").addEventListener("click", (e) => {
   if (e.target.closest("button")) return;
-  const tr = e.target.closest("tr[data-bditem], tr[data-fmetric]");
+  const tr = e.target.closest("[data-bditem], [data-fmetric]");
   if (!tr) return;
   if (tr.dataset.fmetric) state.finMetric = tr.dataset.fmetric;
   else state.finItem = { ...(state.finItem || {}), [tr.dataset.kind]: tr.dataset.bditem };
@@ -2143,7 +2178,7 @@ document.addEventListener("change", (e) => {
 // Phones: wide tables (class "bd" and the Banks table) reflow into one card per row. Each cell
 // gets its column heading as data-l, which the phone stylesheet shows as a small label.
 function labelCells(root = document) {
-  root.querySelectorAll("table.bd:not(.bonus-t), #banks-table").forEach((t) => {
+  root.querySelectorAll("#banks-table").forEach((t) => {
     const heads = [...t.querySelectorAll("thead th")].map((th) => ((th.querySelector("button") || th).textContent || "").replace(/[↓↑]/g, "").trim());
     t.querySelectorAll("tbody tr").forEach((tr) => {
       let i = 0;
@@ -2164,3 +2199,6 @@ new MutationObserver(() => {
 $("banks-sort")?.addEventListener("change", (e) => { state.bankSort = e.target.value || null; renderBanks(); });
 // Base-rate matrix: folded away on phones until asked for.
 $("base-mx-open")?.addEventListener("click", (e) => { const card = e.target.closest(".mx-card"); card.classList.toggle("open"); e.target.textContent = card.classList.contains("open") ? "Hide the matrix" : "Show the bank × bank matrix"; });
+
+// keyboard: Enter/Space on a phone-list row selects it like a click
+document.addEventListener("keydown", (e) => { if ((e.key === "Enter" || e.key === " ") && e.target.matches?.(".m-row[role=button]")) { e.preventDefault(); e.target.click(); } });
