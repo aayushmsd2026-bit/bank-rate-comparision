@@ -460,6 +460,8 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 .alt-view .rank-list { padding: 0 12px; }
 .alt-view .rr-v small { display: block; margin-top: 2px; }
 
+.phone-sort, .mx-open { display: none; }
+
 /* ---------- laptops: keep the header on one line ---------- */
 @media (min-width: 761px) and (max-width: 1440px) {
   .nav-inner { gap: 18px; }
@@ -533,16 +535,52 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
   /* rate grids: shorter rows */
   .grid td, .grid th { padding-top: 8px; padding-bottom: 8px; }
   .bonus-dlg { max-height: calc(100vh - 24px); }
+  .bonus-dlg .bd-wrap { max-height: none; overflow: visible; }
+
+  /* wide tables become one card per row: name and headline figure on top, the rest as labelled facts */
+  table.bd, table.bd tbody, #banks-table, #banks-table tbody { display: block; width: 100%; }
+  table.bd thead, #banks-table thead { display: none; }
+  table.bd tr, #banks-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 22px; padding: 12px 14px; border-bottom: 1px solid var(--hair-soft); }
+  table.bd td, #banks-table td { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; padding: 0 !important; border: 0 !important; text-align: right; font-size: .76rem; color: var(--ink); min-width: 0; background: none !important; flex-wrap: wrap; row-gap: 0; }
+  table.bd td::before, #banks-table td::before { content: attr(data-l); color: var(--muted); font-weight: 500; text-align: left; font-size: .72rem; }
+  table.bd td:first-child, #banks-table td:first-child { grid-column: 1; font-weight: 700; font-size: .9rem; text-align: left; justify-content: flex-start; flex-wrap: wrap; }
+  table.bd td:nth-child(2), #banks-table td:nth-child(2) { grid-column: 2; font-size: .95rem; font-weight: 700; }
+  table.bd td:first-child::before, table.bd td:nth-child(2)::before, #banks-table td:first-child::before { content: none; }
+  table.bd td[colspan] { grid-column: 1 / -1; justify-content: flex-start; }
+  table.bd td[colspan]::before { content: none; }
+  table.bd tr.sel, table.bd tr.cur, #banks-table tr.ref-row { background: var(--brand-tint); box-shadow: inset 3px 0 0 var(--brand); }
+  table.bd tr.bd-total, #banks-table tr.avg-row { background: var(--paper, #FBFAF5); }
+  table.bd .memo-tag { display: block; width: 100%; font-weight: 400; }
+  #banks-table td .b-vs { display: none; }
+  #banks-table td .val { font-weight: 700; }
+  .bd-wrap { background: none !important; overflow: visible !important; }
+  .sheet { overflow: visible !important; }
+  .sheet { max-height: none !important; height: auto !important; }
+  .phone-sort { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-size: .85rem; font-weight: 600; color: var(--brand-ink); }
+  .phone-sort select { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--hair); border-radius: 8px; background: var(--surface); }
+
+  /* all-banks financial matrix: controls stack, toggles swipe */
+  .mx-controls { flex-direction: column; align-items: stretch; gap: 10px; padding: 0 12px 12px; width: 100%; max-width: 100%; box-sizing: border-box; flex-wrap: nowrap; }
+  .mx-controls > * { min-width: 0; max-width: 100%; }
+  .mx-controls .lbl { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; }
+  .mx-controls .views { margin: 0; }
+  .mx2-wrap { max-height: none; }
+
+  /* base-rate matrix: folded on phones */
+  .mx-open { display: block; margin: 0 16px 16px; }
+  .mx-card .mx-wrap { display: none; }
+  .mx-card.open .mx-wrap { display: block; }
   .vs-t { font-size: .8rem; table-layout: fixed; }
   .vs-t th:nth-child(1) { width: 34%; } .vs-t th:nth-child(2), .vs-t th:nth-child(3) { width: 24%; } .vs-t th:nth-child(4) { width: 18%; }
   .vs-t td.num:not(:last-child) { white-space: normal; word-break: keep-all; line-height: 1.3; }
   .vs-t .chg { font-size: .72rem; padding: 2px 4px; }
+  .vs-t.vs-fin th:nth-child(1) { width: 36%; } .vs-t.vs-fin th:nth-child(2), .vs-t.vs-fin th:nth-child(3) { width: 21%; } .vs-t.vs-fin th:nth-child(4) { width: 22%; }
   .vs-t th:first-child, .vs-t td:first-child { padding-left: 12px; }
   .vs-t th:last-child, .vs-t td:last-child { padding-right: 12px; }
   .vs-t td { padding: 9px 6px; }
   .alt-head { padding: 14px 12px 8px; }
   .views .toggle { width: 100%; }
-  .views .toggle button { flex: 1; }
+  .views .toggle button { flex: 1 1 0; min-width: 0; padding: 8px 6px; }
 }
 
 /* ---------- print: one clean page per view, no controls ---------- */

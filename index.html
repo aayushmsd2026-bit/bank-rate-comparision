@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611100842">
+  <link rel="stylesheet" href="style.css?v=202611100902">
 </head>
 <body>
   <header class="nav">
@@ -122,6 +122,7 @@
           <p>Each cell = <b>row bank's base rate − column bank's base rate</b>, in percentage points. Read along <span class="ref-label"></span>'s row to see how far above or below each bank <span class="ref-label"></span> is; <span class="ref-label"></span>'s column shows the reverse.
             <span class="key-sw low"></span> row bank lower <span class="key-sw high"></span> row bank higher · tap or hover a cell for the full sentence</p>
         </header>
+        <button type="button" class="btn-ghost mx-open" id="base-mx-open">Show the bank × bank matrix</button>
         <div class="mx-wrap"><table id="base-matrix" class="mx"></table></div>
       </article>
     </section>
@@ -201,6 +202,7 @@
         </div>
         <button class="btn-cta" type="button" data-xlsx>Download Excel</button>
       </div>
+      <label class="phone-sort">Sort by <select id="banks-sort" aria-label="Sort banks by"></select></label>
       <div class="sheet"><table id="banks-table" class="list banks"></table></div>
       <p class="legend">
         <span>Under each figure: how that bank compares with <span class="ref-label"></span>, e.g. "4.42 pp below <span class="ref-label"></span>" = that bank's figure is 4.42 percentage points lower than <span class="ref-label"></span>'s (not a change over time)</span>
@@ -255,6 +257,6 @@
     <p id="install-steps"></p>
     <button type="button" class="btn-ghost" data-close-install>Got it</button>
   </dialog>
-  <script src="app.js?v=202611100842"></script>
+  <script src="app.js?v=202611100902"></script>
 </body>
 </html>

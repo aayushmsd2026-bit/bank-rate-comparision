@@ -804,6 +804,8 @@ function renderBanks() {
   const avg = metrics.map((mt) => (stats[mt.key] ? `<td class="num">${fmt(mt, stats[mt.key].avg)}</td>` : `<td></td>`)).join("");
   body += `<tr class="avg-row"><td class="bank">Market average</td>${avg}</tr>`;
   $("banks-table").innerHTML = head + `<tbody>${body}</tbody>`;
+  const sortSel = $("banks-sort");
+  if (sortSel) sortSel.innerHTML = `<option value="">A–Z</option>` + metrics.map((mt) => `<option value="${mt.key}" ${state.bankSort === mt.key ? "selected" : ""}>${esc(mt.label)} (best first)</option>`).join("");
 }
 
 // ---------- bank financials (Nepal Rastra Bank, monthly) ----------
@@ -1229,15 +1231,58 @@ function renderFinMatrix(m) {
     body += `<td class="mx-mkt">${mk}</td></tr>`;
   }
 
+  // Phones open on head to head (the comparison bank against one bank) or a ranking of one line item;
+  // the full 20-bank table stays one tap away.
+  const view = state.mxView || (window.innerWidth <= 760 ? "vs" : "table");
+  const rkTxt = (rk) => (rk ? `#${rk.r}` : "—");
+  let alt = "";
+  if (view === "vs") {
+    const other = vsBank();
+    const pick = `<label class="alt-pick">${esc(R())} vs <select data-vsbank>${others.slice().sort((a, b) => (SCRIP[a] || a).localeCompare(SCRIP[b] || b)).map((c) => `<option value="${esc(c)}" ${c === other ? "selected" : ""}>${esc(SCRIP[c] || c)} · ${esc(bankName(c))}</option>`).join("")}</select></label>`;
+    let vb = "", vg = null, ahead = 0, behind = 0;
+    for (const row of rows) {
+      if (row.group !== vg) { vg = row.group; vb += `<tr class="seg"><td colspan="4">${esc(groupNames[vg])}</td></tr>`; }
+      const rowMode = row.kind === "metric" && mode !== "rank" ? "val" : mode;
+      const a = mxRank(row, REF, mode), b = mxRank(row, other, mode);
+      let gap = "";
+      if (a && b) {
+        if (a.r < b.r) ahead++; else if (a.r > b.r) behind++;
+        gap = a.r === b.r ? `<span class="chg even">=</span>` : `<span class="chg ${a.r < b.r ? "good" : "bad"}" title="${esc(R())} ranks ${a.r}, ${esc(scripOf(other))} ranks ${b.r} of ${a.n}">${a.r < b.r ? "▲" : "▼"}${a.r}·${b.r}</span>`;
+      }
+      vb += `<tr class="${row.total ? "vs-total" : ""}"><td class="vs-name">${esc(row.label)}${row.note ? `<span class="var">${esc(row.note)}</span>` : ""}</td>
+        <td class="num me">${mxCellText(row, row.cells[REF], rowMode)}</td><td class="num">${mxCellText(row, row.cells[other], rowMode)}</td><td class="num">${gap}</td></tr>`;
+    }
+    alt = `<div class="alt-head">${pick}<p class="alt-sum"><b class="good">${ahead}</b> ${esc(R())} ranks higher · <b class="bad">${behind}</b> lower · ${esc(unitNote)}</p></div>
+      <div class="bd-wrap"><table class="vs-t vs-fin"><thead><tr><th>Line item</th><th class="num me">${esc(R())}</th><th class="num">${esc(scripOf(other))}</th><th class="num" title="Rank among banks: ${esc(R())} · ${esc(scripOf(other))}">Rank</th></tr></thead><tbody>${vb}</tbody></table></div>`;
+  } else if (view === "rank") {
+    const key = (r) => `${r.group}|${r.label}`;
+    let i = rows.findIndex((r) => key(r) === state.mxRow);
+    if (i < 0) i = 0;
+    const row = rows[i];
+    state.mxRow = key(row);
+    const rowMode = row.kind === "metric" && mode !== "rank" ? "val" : mode;
+    const ranked = cols.filter((c) => row.cells[c]).map((c) => ({ c, rk: mxRank(row, c, mode) })).sort((a, b) => (a.rk?.r ?? 99) - (b.rk?.r ?? 99));
+    const opts = rows.map((r, j) => `<option value="${j}" ${j === i ? "selected" : ""}>${esc(groupNames[r.group])} · ${esc(r.label)}</option>`).join("");
+    alt = `<div class="alt-head"><div class="alt-step">
+        <button type="button" class="btn-ghost" data-mxstep="-1" aria-label="Previous line item" ${i === 0 ? "disabled" : ""}>‹</button>
+        <select data-mxrow aria-label="Line item">${opts}</select>
+        <button type="button" class="btn-ghost" data-mxstep="1" aria-label="Next line item" ${i === rows.length - 1 ? "disabled" : ""}>›</button></div>
+        <p class="alt-sum">Largest (or best) first · ${esc(unitNote)}</p></div>
+      <div class="rank-list">${ranked.map(({ c, rk }) => `<div class="rank-row ${c === REF ? "me" : ""}"><span class="rr-n">${rk ? rk.r : "—"}</span>
+        <span class="rr-bank"><b>${esc(SCRIP[c] || c)}</b> <span>${esc(bankName(c))}</span></span>
+        <span class="rr-v"><b>${mxCellText(row, row.cells[c], rowMode)}</b></span></div>`).join("")}</div>`;
+  }
+  const views = `<div class="views"><div class="toggle" role="group" aria-label="View">${[["vs", "Head to head"], ["rank", "Ranking"], ["table", "All banks"]].map(([k, l]) => `<button type="button" data-mxview="${k}" aria-pressed="${k === view}">${l}</button>`).join("")}</div></div>`;
+
   $("fin-breakdown").innerHTML = `<header class="card-head chart-head"><div>
       <h2>All banks side by side · ${esc(m.bs)}</h2>
-      <p>Each row is shaded by rank within that row: darker = larger (or better). ${esc(R())} is pinned first · tap or hover a cell for its full figures</p></div></header>
-    <div class="mx-controls">
+      <p>${view === "table" ? `Each row is shaded by rank within that row: darker = larger (or better). ${esc(R())} is pinned first · tap or hover a cell for its full figures` : `Every line item from NRB's figures, ${view === "vs" ? `${esc(R())} against one bank` : "one line item at a time with every bank"}`}</p></div></header>
+    <div class="mx-controls">${views}
       <label class="lbl">Show ${tog("mxmode", MX_MODES, mode)}</label>
       <label class="lbl">Rows ${tog("mxgroup", MX_GROUPS, group)}</label>
-      <label class="lbl">Bank order ${tog("mxorder", [["loans", "By loans"], ["deposits", "By deposits"], ["az", "A–Z"]], order)}</label>
+      ${view === "table" ? `<label class="lbl">Bank order ${tog("mxorder", [["loans", "By loans"], ["deposits", "By deposits"], ["az", "A–Z"]], order)}</label>` : ""}
     </div>
-    <div class="mx2-wrap"><table class="mx2">${head}<tbody>${body}</tbody></table></div>
+    ${view === "table" ? `<div class="mx2-wrap"><table class="mx2">${head}<tbody>${body}</tbody></table></div>` : `<div class="alt-view">${alt}</div>`}
     <p class="legend mx-legend"><span>Profitability rows always show their own measure (switch to <b>Rank</b> to rank them)</span><span>* market median</span><span>Amounts in Rs arba (billion)</span></p>`;
 }
 
@@ -1837,6 +1882,12 @@ document.addEventListener("click", (e) => {
   }
   if (t.dataset.fsec) { state.finSection = t.dataset.fsec; history.replaceState(null, "", location.search + "#fin/" + state.finSection); return renderFinancials(); }
   if (t.dataset.lview) { state.finLoanView = t.dataset.lview; return renderFinancials(); }
+  if (t.dataset.mxview) { state.mxView = t.dataset.mxview; return renderFinancials(); }
+  if (t.dataset.mxstep) {
+    const sel = document.querySelector("[data-mxrow]"), j = Number(sel.value) + Number(t.dataset.mxstep);
+    if (sel.options[j]) { sel.value = String(j); sel.dispatchEvent(new Event("change", { bubbles: true })); }
+    return;
+  }
   if (t.dataset.mxmode) { state.mxMode = t.dataset.mxmode; return renderFinancials(); }
   if (t.dataset.mxgroup) { state.mxGroup = t.dataset.mxgroup; return renderFinancials(); }
   if (t.dataset.mxorder) { state.mxOrder = t.dataset.mxorder; return renderFinancials(); }
@@ -2049,7 +2100,13 @@ document.addEventListener("change", (e) => {
   const t = e.target;
   if (t.matches("[data-vsbank]")) {
     state.vsBank = t.value; try { localStorage.setItem("vsBank", t.value); } catch {}
-    renderGrid("deposit"); renderGrid("loan");
+    renderGrid("deposit"); renderGrid("loan"); if (state.fin) renderFinancials();
+  } else if (t.matches("[data-mxrow]")) {
+    const m = finMonth(), group = state.mxGroup || "all";
+    const rows = matrixRows(m).filter((r) => group === "all" || r.group === group);
+    const r = rows[Number(t.value)];
+    state.mxRow = `${r.group}|${r.label}`;
+    renderFinancials();
   } else if (t.matches("[data-rankrow]")) {
     const sec = t.dataset.rankrow;
     const rows = state.rows.filter((r) => r.section === sec && Object.keys(r.cells).length);
@@ -2057,3 +2114,28 @@ document.addEventListener("change", (e) => {
     renderGrid(sec);
   }
 });
+
+// Phones: wide tables (class "bd" and the Banks table) reflow into one card per row. Each cell
+// gets its column heading as data-l, which the phone stylesheet shows as a small label.
+function labelCells(root = document) {
+  root.querySelectorAll("table.bd, #banks-table").forEach((t) => {
+    const heads = [...t.querySelectorAll("thead th")].map((th) => ((th.querySelector("button") || th).textContent || "").replace(/[↓↑]/g, "").trim());
+    t.querySelectorAll("tbody tr").forEach((tr) => {
+      let i = 0;
+      for (const td of tr.children) {
+        if (!td.hasAttribute("data-l") && heads[i]) td.setAttribute("data-l", heads[i]);
+        i += Number(td.getAttribute("colspan") || 1);
+      }
+    });
+  });
+}
+let labelQueued = false;
+new MutationObserver(() => {
+  if (labelQueued) return;
+  labelQueued = true;
+  requestAnimationFrame(() => { labelQueued = false; labelCells(); });
+}).observe(document.body, { childList: true, subtree: true });
+
+$("banks-sort")?.addEventListener("change", (e) => { state.bankSort = e.target.value || null; renderBanks(); });
+// Base-rate matrix: folded away on phones until asked for.
+$("base-mx-open")?.addEventListener("click", (e) => { const card = e.target.closest(".mx-card"); card.classList.toggle("open"); e.target.textContent = card.classList.contains("open") ? "Hide the matrix" : "Show the bank × bank matrix"; });
