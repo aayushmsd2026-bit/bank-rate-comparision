@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=202611100927">
+  <link rel="stylesheet" href="style.css?v=202611111619">
 </head>
 <body>
   <header class="nav">
@@ -70,7 +70,7 @@
         <article class="card">
           <header class="card-head">
             <h2>Deposit rate scorecard</h2>
-            <p>Live rates from bankbyaj.com · ranked by each bank's highest rate · 1 = pays most<span class="phone-only"> · tap a group to open or close it</span></p>
+            <p>Live rates · ranked by each bank's highest rate · 1 = pays most<span class="phone-only"> · tap a group to open or close it</span></p>
           </header>
           <table id="deposit-score" class="score"></table>
           <p id="deposit-missing" class="missing"></p>
@@ -78,7 +78,7 @@
         <article class="card">
           <header class="card-head">
             <h2>Lending rate scorecard</h2>
-            <p>Live rates from bankbyaj.com · ranked by each bank's lowest rate · 1 = cheapest<span class="phone-only"> · tap a group to open or close it</span></p>
+            <p>Live rates · ranked by each bank's lowest rate · 1 = cheapest<span class="phone-only"> · tap a group to open or close it</span></p>
           </header>
           <table id="loan-score" class="score"></table>
           <p id="loan-missing" class="missing"></p>
@@ -245,10 +245,14 @@
       <svg class="foot-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#fff"/><path d="M9 22v-6m7 6V10m7 12v-9" stroke="#1B2D4F" stroke-width="3" stroke-linecap="round"/></svg>
       <div>
         <p class="stamp"></p>
-        <p><b>Bank Tulana</b> is an independent project. It is not endorsed by any bank or by BankByaj. Figures are for information only; check them with the bank before relying on them.</p>
-        <p>Rates: <a href="https://bankbyaj.com" target="_blank" rel="noopener">bankbyaj.com</a>, read live on every visit with an hourly backup copy. Bank financials: <a href="https://www.nrb.org.np/category/monthly-statistics/?department=bfr" target="_blank" rel="noopener">Nepal Rastra Bank</a> monthly Banking &amp; Financial Statistics, updated automatically when NRB publishes.
-          Commercial banks = Class A. Loans: products named "Fixed" are fixed rate, all others variable; offer rates used where listed.
-          Fixed deposit tenures are read from product names (e.g. "3Mto&lt;6M", "&gt;1Yto2Y", "5Y&amp;above").</p>
+        <p><b>Bank Tulana</b> is an independent project, not endorsed by any bank. Figures are for information only; check them with the bank before relying on them.</p>
+        <details class="foot-about">
+          <summary>About, sources and disclaimer</summary>
+          <p><b>Sources.</b> Interest rates and base rates: <a href="https://bankbyaj.com" target="_blank" rel="noopener">bankbyaj.com</a>, read on every visit with an hourly backup copy. Bank financials: <a href="https://www.nrb.org.np/category/monthly-statistics/?department=bfr" target="_blank" rel="noopener">Nepal Rastra Bank</a> monthly Banking &amp; Financial Statistics, updated automatically when NRB publishes.</p>
+          <p><b>Disclaimer.</b> Bank Tulana is not affiliated with or endorsed by any bank, BankByaj or Nepal Rastra Bank. Nothing here is financial advice. Rates change often and may be out of date or contain errors; confirm with the bank before making a decision.</p>
+          <p><b>How figures are read.</b> Commercial banks = Class A. Loans: products named "Fixed" are fixed rate, all others variable; offer rates used where listed.
+            Fixed deposit tenures are read from product names (e.g. "3Mto&lt;6M", "&gt;1Yto2Y", "5Y&amp;above").</p>
+        </details>
       </div>
     </div>
   </footer>
@@ -258,6 +262,6 @@
     <p id="install-steps"></p>
     <button type="button" class="btn-ghost" data-close-install>Got it</button>
   </dialog>
-  <script src="app.js?v=202611100927"></script>
+  <script src="app.js?v=202611111619"></script>
 </body>
 </html>

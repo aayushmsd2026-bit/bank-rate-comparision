@@ -400,7 +400,7 @@ function renderStatus() {
   if (!m) return;
   setBadge(state.source === "live" ? "Live" : "Backup copy", state.source === "live" ? "live" : "snap");
   const stamp = state.source === "live" ? `Live · fetched ${fmtDate(state.data.fetched_at)}` : `Backup copy from ${fmtDate(state.data.fetched_at)}`;
-  document.querySelectorAll(".stamp").forEach((el) => (el.textContent = `${stamp}${m.modified ? ` · BankByaj updated ${fmtDate(m.modified)}` : ""}`));
+  document.querySelectorAll(".stamp").forEach((el) => (el.textContent = `${stamp}${m.modified ? ` · rates last changed ${fmtDate(m.modified)}` : ""}`));
 }
 
 function render() {
@@ -429,7 +429,7 @@ function renderUpdates() {
   const items = m.updates.slice(0, 3).map((u) =>
     `<span class="upd"><b>${esc(u.title)}</b> <span class="dim">${esc(u.updated_at || "")}</span></span>`);
   if (fresh && fresh < m.banks.length) items.push(`<span class="upd"><b>${fresh} of ${m.banks.length}</b> banks have published this period's base rate <span class="dim">(marked <span class="fresh">new</span>)</span></span>`);
-  $("updates").innerHTML = items.length ? `<span class="upd-label">Latest from BankByaj</span>${items.join("")}` : "";
+  $("updates").innerHTML = items.length ? `<span class="upd-label">Latest rate notices</span>${items.join("")}` : "";
   $("updates").hidden = !items.length;
 }
 

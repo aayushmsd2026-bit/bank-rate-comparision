@@ -721,3 +721,8 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 
 .phone-text { display: none; }
 @media (max-width: 760px) { .phone-text { display: inline !important; } .desk-text { display: none !important; } }
+
+.foot-about { margin-top: 6px; }
+.foot-about summary { cursor: pointer; color: #fff; font-weight: 600; padding: 6px 0; width: fit-content; }
+.foot-about p { margin-top: 6px; }
+@media print { .foot-about > p { display: block; } }
