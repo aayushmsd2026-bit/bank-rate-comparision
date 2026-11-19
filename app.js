@@ -939,6 +939,26 @@ function itemFacts(m, code, it) {
     growth: prev ? pctOf(amt - prev, prev) : null,
     mktGrowth: mktPrev ? pctOf(mktNow - mktPrev, mktPrev) : null,
     mktMix: pctOf(mktNow, sumOf(m, it.base)),
+    ...fyFacts(m, code, it, amt, mktNow),
+  };
+}
+// This fiscal year so far: balance now minus balance at the end of the last fiscal year (Asar).
+// For Asar itself that is the whole fiscal year just closed.
+const fyBaseMonth = (m) => monthById(shiftId(m.id, -m.fy_month));
+const fyFrom = (m) => monthName(shiftId(m.id, -m.fy_month));               // "Asar 2083"
+const fmtChg = (mn) => (mn === null || mn === undefined || !Number.isFinite(mn) ? "—" : `${mn >= 0 ? "+" : "−"}${fmtArba(Math.abs(mn))}`);
+function fyFacts(m, code, it, amt, mktNow) {
+  const base = fyBaseMonth(m);
+  if (!base) return { fy: null, fyPct: null, mktFy: null, fyShare: null, fyRank: null };
+  const was = base.banks[code]?.[it.key];
+  const fy = was === undefined ? null : amt - was;
+  const mktWas = Object.values(base.banks).reduce((t, x) => t + (x[it.key] || 0), 0);
+  const changes = Object.keys(m.banks).map((c) => { const a = m.banks[c][it.key], w = base.banks[c]?.[it.key]; return a === undefined || w === undefined ? null : a - w; }).filter((x) => x !== null);
+  const mktFy = mktNow - mktWas;
+  return {
+    fy, fyPct: fy !== null && was ? pctOf(fy, was) : null, mktFy, mktFyPct: mktWas ? pctOf(mktFy, mktWas) : null,
+    fyShare: fy !== null && fy > 0 && mktFy > 0 ? pctOf(fy, mktFy) : null,   // share of all banks' increase (only when both grew)
+    fyRank: fy === null ? null : 1 + changes.filter((x) => x > fy).length,
   };
 }
 
@@ -1007,7 +1027,7 @@ function renderFinancials() {
   state.finSection ||= "deposit";
   state.finLoanView ||= "product";
   $("fin-month").innerHTML = [...state.fin.months].reverse().map((x) => `<option value="${esc(x.id)}" ${x.id === m.id ? "selected" : ""}>${esc(x.bs)} (${esc(x.label)})</option>`).join("");
-  $("fin-source").innerHTML = `Nepal Rastra Bank monthly statistics · position at <b>${esc(m.bs)}</b> (${esc(m.label)}) · balances are at the end of ${esc(m.bs)}; changes compare with ${esc(yaName(m))} (12 months earlier) · profit figures cover ${esc(ytdName(m))} (${m.fy_month} month${m.fy_month > 1 ? "s" : ""} of the fiscal year) · <a href="${esc(m.source)}" target="_blank" rel="noopener">NRB file</a>`;
+  $("fin-source").innerHTML = `Nepal Rastra Bank monthly statistics · position at <b>${esc(m.bs)}</b> (${esc(m.label)}) · balances are totals outstanding at the end of ${esc(m.bs)}; <b>this fiscal year</b> = change since the end of ${esc(fyFrom(m))}; % changes compare with ${esc(yaName(m))} (12 months earlier) · profit figures cover ${esc(ytdName(m))} (${m.fy_month} month${m.fy_month > 1 ? "s" : ""} of the fiscal year) · <a href="${esc(m.source)}" target="_blank" rel="noopener">NRB file</a>`;
   $("fin-sections").innerHTML = FIN_SECTIONS.map(([k, l, sh]) => `<button type="button" data-fsec="${k}" aria-pressed="${k === state.finSection}"><span class="t-long">${esc(l)}</span><span class="t-short">${esc(sh || l)}</span></button>`).join("");
   document.querySelectorAll(".ref-label").forEach((el) => (el.textContent = R()));
   $("fin-trend").hidden = false; $("fin-rank").hidden = false; $("fin-pick").hidden = true;
@@ -1024,7 +1044,7 @@ function renderFinSnapshot(m) {
     const f = itemFacts(m, REF, it);
     if (!f) return "";
     return `<div class="kpi ${cls}"><div class="k-label">${esc(it.label)}</div><div class="k-value">${fmtArba(f.amt)}</div>
-      <div class="k-facts">${it.total ? "" : `<span><b>${fmtPct(f.mix)}</b> of ${esc(R())}'s ${it.base}</span>`}<span><b>${fmtPct(f.share, 2)}</b> market share</span><span>Rank <b>#${f.rank}</b> of ${f.n}</span>${f.growth !== null ? `<span><b>${fmtSigned(f.growth)}</b> ${sinceYa(m)}</span>` : ""}</div></div>`;
+      <div class="k-facts">${it.total ? "" : `<span><b>${fmtPct(f.mix)}</b> of ${esc(R())}'s ${it.base}</span>`}<span><b>${fmtPct(f.share, 2)}</b> market share</span><span>Rank <b>#${f.rank}</b> of ${f.n}</span>${f.fy !== null ? `<span><b>${fmtChg(f.fy)}</b> this fiscal year</span>` : ""}${f.growth !== null ? `<span><b>${fmtSigned(f.growth)}</b> ${sinceYa(m)}</span>` : ""}</div></div>`;
   };
   const I = (k) => itemByKey(k);
   const cards = state.finSection === "deposit"
@@ -1050,7 +1070,7 @@ function renderFinBreakdown(m, kind) {
   rows.sort((a, b) => (a.it.memo ? 1 : 0) - (b.it.memo ? 1 : 0) || ((a.f[sortKey] ?? -1e18) - (b.f[sortKey] ?? -1e18)) * dir);
   const th = (k, label, title = "") => `<th class="num ${sortKey === k ? "on" : ""}"><button type="button" data-bdsort="${k}" data-kind="${kind}" title="${esc(title || "Sort by " + label)}">${label}${sortKey === k ? " ↓" : ""}</button></th>`;
   const head = `<thead><tr><th>${kind === "deposit" ? "Deposit type" : kind === "product" ? "Loan product" : "Lending sector"}</th>
-    ${th("amt", `${esc(R())} amount`)}${th("mix", `% of ${esc(R())}'s ${g.baseLabel}`)}${th("share", "Market share", `${R()}'s share of all 20 banks' total`)}${th("rank", "Rank among banks", "1 = largest amount")}
+    ${th("amt", `${esc(R())} amount`)}${th("mix", `% of ${esc(R())}'s ${g.baseLabel}`)}${th("share", "Market share", `${R()}'s share of all 20 banks' total`)}${th("rank", "Rank among banks", "1 = largest amount")}${th("fy", `Change this fiscal year`, `Change since the end of ${fyFrom(m)} (last fiscal year end)`)}
     ${th("growth", `${esc(R())} change ${sinceYa(m)}`)}${th("mktGrowth", `All banks' change ${sinceYa(m)}`)}${th("mktMix", `% of all banks' ${g.baseLabel}`, `This item as a share of all 20 banks' ${g.baseLabel}`)}</tr></thead>`;
   const total = itemFacts(m, REF, { key: g.base, base: g.base, label: FIN_TOTALS[kind].label });
   const body = rows.map(({ it, f }) => `<tr class="bd-row ${it.key === sel.key ? "sel" : ""} ${it.memo ? "memo" : ""}" data-bditem="${it.key}" data-kind="${kind}" title="Show how all banks compare on ${esc(it.label)}">
@@ -1059,23 +1079,26 @@ function renderFinBreakdown(m, kind) {
       <td class="num"><span class="mixbar"><i style="width:${Math.min(100, f.mix || 0).toFixed(1)}%"></i></span>${fmtPct(f.mix)}</td>
       <td class="num">${fmtPct(f.share, 2)}</td>
       <td class="num">${rankChip(f.rank, f.n)} <span class="dim">of ${f.n}</span></td>
+      <td class="num ${f.fy === null ? "" : f.fy >= 0 ? "up" : "down"}" title="${f.fyShare !== null ? `${fmtPct(f.fyShare)} of all banks' change this fiscal year` : ""}">${fmtChg(f.fy)}${f.fyPct !== null ? ` <span class="dim">(${fmtSigned(f.fyPct)})</span>` : ""}</td>
       <td class="num ${f.growth !== null && f.mktGrowth !== null ? (f.growth >= f.mktGrowth ? "up" : "down") : ""}">${fmtSigned(f.growth)}</td>
       <td class="num dim">${fmtSigned(f.mktGrowth)}</td>
       <td class="num dim">${fmtPct(f.mktMix)}</td></tr>`).join("") +
-    (total ? `<tr class="bd-total"><td>${esc(FIN_TOTALS[kind].label)}</td><td class="num"><b>${fmtArba(total.amt)}</b></td><td class="num">100%</td><td class="num">${fmtPct(total.share, 2)}</td><td class="num">${rankChip(total.rank, total.n)} <span class="dim">of ${total.n}</span></td><td class="num">${fmtSigned(total.growth)}</td><td class="num dim">${fmtSigned(total.mktGrowth)}</td><td class="num dim">100%</td></tr>` : "");
+    (total ? `<tr class="bd-total"><td>${esc(FIN_TOTALS[kind].label)}</td><td class="num"><b>${fmtArba(total.amt)}</b></td><td class="num">100%</td><td class="num">${fmtPct(total.share, 2)}</td><td class="num">${rankChip(total.rank, total.n)} <span class="dim">of ${total.n}</span></td><td class="num">${fmtChg(total.fy)}${total.fyPct !== null ? ` <span class="dim">(${fmtSigned(total.fyPct)})</span>` : ""}</td><td class="num">${fmtSigned(total.growth)}</td><td class="num dim">${fmtSigned(total.mktGrowth)}</td><td class="num dim">100%</td></tr>` : "");
   const switcher = state.finSection === "loan" ? `<div class="toggle" role="group" aria-label="Break loans down by">
       <button type="button" data-lview="product" aria-pressed="${kind === "product"}">By product</button><button type="button" data-lview="sector" aria-pressed="${kind === "sector"}">By sector</button></div>` : "";
   // phones: one compact row per item instead of the wide table
+  const fyTxt = (f) => (f.fy === null ? "" : `<span class="m-g ${f.fy >= 0 ? "up" : "down"}">${fmtChg(f.fy)}</span> this fiscal year${f.fyPct !== null ? ` (${fmtSigned(f.fyPct)})` : ""}${f.fyShare !== null ? ` <span class="dim">· ${fmtPct(f.fyShare)} of all banks' increase</span>` : ""}`);
   const growthTxt = (f) => (f.growth === null ? "" : `<span class="m-g ${f.mktGrowth !== null ? (f.growth >= f.mktGrowth ? "up" : "down") : ""}">${fmtSigned(f.growth)}</span> ${sinceYa(m)}${f.mktGrowth !== null ? ` <span class="dim">· all banks ${fmtSigned(f.mktGrowth)}</span>` : ""}`);
   const mrows = rows.map(({ it, f }) => `<div class="m-row ${it.key === sel.key ? "sel" : ""}" role="button" tabindex="0" data-bditem="${it.key}" data-kind="${kind}">
       <div class="m-top"><span class="m-name">${esc(it.label)}${it.memo ? '<small>memo, overlaps other products</small>' : ""}</span><b class="m-val">${fmtArba(f.amt)}</b></div>
       <div class="m-sub">${fmtPct(f.mix)} of ${esc(R())}'s ${g.baseLabel} · ${fmtPct(f.share, 2)} market share · rank ${rankChip(f.rank, f.n)} of ${f.n}</div>
+      <div class="m-sub">${fyTxt(f)}</div>
       <div class="m-sub">${growthTxt(f)}</div></div>`).join("") +
     (total ? `<div class="m-row m-total"><div class="m-top"><span class="m-name">${esc(FIN_TOTALS[kind].label)}</span><b class="m-val">${fmtArba(total.amt)}</b></div>
-      <div class="m-sub">${fmtPct(total.share, 2)} market share · rank ${rankChip(total.rank, total.n)} of ${total.n}</div><div class="m-sub">${growthTxt(total)}</div></div>` : "");
+      <div class="m-sub">${fmtPct(total.share, 2)} market share · rank ${rankChip(total.rank, total.n)} of ${total.n}</div><div class="m-sub">${fyTxt(total)}</div><div class="m-sub">${growthTxt(total)}</div></div>` : "");
   $("fin-breakdown").innerHTML = `<header class="card-head chart-head"><div>
       <h2>${esc(R())}'s ${kind === "deposit" ? "deposits by type" : kind === "product" ? "loans by product" : "loans by sector"}</h2>
-      <p>Largest first · change is ${sinceYa(m)} (12 months); <b class="up">green</b> = ${esc(R())} grew faster than all banks together, <b class="down">red</b> = slower · tap or click a row to compare all banks on it</p></div>${switcher}</header>
+      <p>Largest first · <b>this fiscal year</b> = change since the end of ${fyFrom(m)}; the % change is ${sinceYa(m)} (12 months); <b class="up">green</b> = ${esc(R())} grew faster than all banks together, <b class="down">red</b> = slower · tap or click a row to compare all banks on it</p></div>${switcher}</header>
     <div class="bd-wrap desk-only"><table class="bd">${head}<tbody>${body}</tbody></table></div>
     <div class="m-list">${mrows}</div>`;
   renderFinPicker(kind, items, totalIt, sel);
@@ -1096,19 +1119,22 @@ function renderFinPicker(kind, items, totalIt, sel) {
 
 // All 20 banks on one line item: by amount, or by how much of their own book it is.
 function renderFinRanking(m, it) {
-  const by = it.total ? "amt" : state.finRankBy || "amt";
+  const by = it.total && state.finRankBy === "mix" ? "amt" : state.finRankBy || "amt";
   const rows = Object.keys(m.banks).map((c) => ({ c, f: itemFacts(m, c, it) })).filter((r) => r.f);
-  rows.sort((a, b) => (by === "amt" ? b.f.amt - a.f.amt : (b.f.mix ?? -1) - (a.f.mix ?? -1)));
-  const max = Math.max(...rows.map((r) => (by === "amt" ? r.f.amt : r.f.mix || 0)), 1);
+  const val = (f) => (by === "amt" ? f.amt : by === "fy" ? f.fy ?? 0 : f.mix || 0);
+  rows.sort((a, b) => val(b.f) - val(a.f));
+  const max = Math.max(...rows.map((r) => Math.abs(val(r.f))), 1);
   $("fin-rank").innerHTML = `<header class="card-head chart-head"><div>
-      <h2>${esc(it.label)}: all banks</h2><p>${esc(m.bs)} · ${by === "amt" ? "largest amount first" : `largest share of the bank's own ${it.base} first`}</p></div>
-      <div class="toggle" role="group" aria-label="Rank by"><button type="button" data-rankby="amt" aria-pressed="${by === "amt"}">By amount</button>${it.total ? "" : `<button type="button" data-rankby="mix" aria-pressed="${by === "mix"}">By % of own ${esc(it.base)}</button>`}</div></header>
+      <h2>${esc(it.label)}: all banks</h2><p>${esc(m.bs)} · ${by === "amt" ? "largest amount first" : by === "fy" ? `largest increase since the end of ${fyFrom(m)} first` : `largest share of the bank's own ${it.base} first`}</p></div>
+      <div class="toggle" role="group" aria-label="Rank by"><button type="button" data-rankby="amt" aria-pressed="${by === "amt"}">By amount</button><button type="button" data-rankby="fy" aria-pressed="${by === "fy"}">This fiscal year</button>${it.total ? "" : `<button type="button" data-rankby="mix" aria-pressed="${by === "mix"}">By % of own ${esc(it.base)}</button>`}</div></header>
     <div class="rank-list">${rows.map((r, i) => {
-      const me = r.c === REF, v = by === "amt" ? r.f.amt : r.f.mix || 0;
+      const me = r.c === REF, v = Math.max(0, val(r.f));
       return `<div class="rank-row ${me ? "me" : ""}"><span class="rr-n">${i + 1}</span>
         <span class="rr-bank"><b>${esc(SCRIP[r.c] || r.c)}</b> <span>${esc(bankName(r.c))}</span></span>
         <span class="rr-bar"><i style="width:${((100 * v) / max).toFixed(1)}%"></i></span>
-        <span class="rr-v"><b>${by === "amt" ? fmtArba(r.f.amt) : fmtPct(r.f.mix)}</b><small>${by === "amt" ? `${fmtPct(r.f.mix)} of its ${esc(it.base)}` : fmtArba(r.f.amt)} · ${fmtPct(r.f.share, 2)} market share</small></span></div>`;
+        <span class="rr-v">${by === "fy"
+          ? `<b class="${(r.f.fy ?? 0) >= 0 ? "up" : "down"}">${fmtChg(r.f.fy)}</b><small>${r.f.fyPct !== null ? `${fmtSigned(r.f.fyPct)} · ` : ""}${r.f.fyShare !== null ? `${fmtPct(r.f.fyShare)} of all banks' increase · ` : ""}now ${fmtArba(r.f.amt)}</small>`
+          : `<b>${by === "amt" ? fmtArba(r.f.amt) : fmtPct(r.f.mix)}</b><small>${by === "amt" ? `${it.total ? "" : `${fmtPct(r.f.mix)} of its ${esc(it.base)} · `}` : `${fmtArba(r.f.amt)} · `}${fmtPct(r.f.share, 2)} market share</small>`}</span></div>`;
     }).join("")}</div>`;
 }
 
@@ -1210,7 +1236,7 @@ function renderFinProfit(m) {
 }
 
 // "All banks side by side": every line item or measure (rows) × every bank (columns).
-const MX_MODES = [["amt", "Amount"], ["share", "Market share"], ["mix", "% of own book"], ["rank", "Rank"], ["growth", "Change over 12 months"]];
+const MX_MODES = [["amt", "Amount"], ["share", "Market share"], ["mix", "% of own book"], ["rank", "Rank"], ["fy", "This fiscal year"], ["growth", "Change over 12 months"]];
 const MX_GROUPS = [["all", "Everything"], ["deposit", "Deposits"], ["product", "Loan products"], ["sector", "Loan sectors"], ["profit", "Profitability"]];
 const MX_PROFIT = ["net_profit", "nii", "fee_income", "cost_income", "roa", "roe", "cost_of_deposits", "yield_on_loans", "spread", "cd_ratio"];
 
@@ -1247,6 +1273,7 @@ function mxCellText(row, f, mode) {
   if (mode === "mix") return row.total ? "100%" : fmtPct(f.mix, 1);
   if (mode === "rank") return `#${f.rank}`;
   if (mode === "growth") return f.growth === null ? "—" : fmtSigned(f.growth, "%", 0);
+  if (mode === "fy") return f.fy === null ? "—" : `${f.fy >= 0 ? "+" : "−"}${Math.abs(arba(f.fy)) >= 100 ? Math.abs(arba(f.fy)).toFixed(1) : Math.abs(arba(f.fy)).toFixed(2)}`;
   return "";
 }
 // Rank within the row for the shown measure (amount/share share one ranking; mix and growth rank separately).
@@ -1254,7 +1281,7 @@ function mxRank(row, code, mode) {
   const f = row.cells[code];
   if (!f) return null;
   if (row.kind === "metric") return f.rank ? { r: f.rank, n: f.n } : null;
-  const key = mode === "mix" ? "mix" : mode === "growth" ? "growth" : "amt";
+  const key = mode === "mix" ? "mix" : mode === "growth" ? "growth" : mode === "fy" ? "fy" : "amt";
   const v = f[key];
   if (v === null || v === undefined) return null;
   const vals = Object.values(row.cells).map((x) => x[key]).filter((x) => x !== null && x !== undefined);
@@ -1281,7 +1308,7 @@ function renderFinMatrix(m) {
 
   const tog = (attr, list, cur) => `<div class="toggle" role="group">${list.map(([k, l]) => `<button type="button" data-${attr}="${k}" aria-pressed="${k === cur}">${esc(l)}</button>`).join("")}</div>`;
   const groupNames = Object.fromEntries([["deposit", "Deposits"], ["product", "Loans by product"], ["sector", "Loans by sector"], ["profit", "Profitability & efficiency"]]);
-  const unitNote = mode === "amt" ? "Rs arba" : mode === "share" ? "% of all 20 banks' total" : mode === "mix" ? "% of the bank's own deposits or loans" : mode === "rank" ? "1 = largest (or best)" : `change ${sinceYa(m)} (12 months)`;
+  const unitNote = mode === "fy" ? `Rs arba added since the end of ${fyFrom(m)}` : mode === "amt" ? "Rs arba" : mode === "share" ? "% of all 20 banks' total" : mode === "mix" ? "% of the bank's own deposits or loans" : mode === "rank" ? "1 = largest (or best)" : `change ${sinceYa(m)} (12 months)`;
 
   let head = `<thead><tr><th class="mx-item">Line item <span class="mx-unit">${esc(unitNote)}</span></th><th class="mx-lead">Leader</th>`;
   for (const c of cols) head += `<th class="${c === REF ? "mx-ref" : ""}" title="${esc(bankName(c))}"><span class="mx-sym">${esc(SCRIP[c] || c)}</span></th>`;
@@ -1301,7 +1328,7 @@ function renderFinMatrix(m) {
       const rk = mxRank(row, c, mode);
       const tip = !f ? "" : row.kind === "metric"
         ? `${bankName(c)} · ${row.label}: ${finFmt(row.mt, f.val)}${f.rank ? ` · rank ${f.rank} of ${f.n}` : ""}`
-        : `${bankName(c)} · ${row.label}: ${fmtArba(f.amt)} · ${row.total ? "" : `${fmtPct(f.mix)} of its ${row.it.base} · `}${fmtPct(f.share, 2)} market share · rank ${f.rank} of ${f.n}${f.growth !== null ? ` · ${fmtSigned(f.growth)} ${sinceYa(m)}` : ""}`;
+        : `${bankName(c)} · ${row.label}: ${fmtArba(f.amt)} · ${row.total ? "" : `${fmtPct(f.mix)} of its ${row.it.base} · `}${fmtPct(f.share, 2)} market share · rank ${f.rank} of ${f.n}${f.fy !== null ? ` · ${fmtChg(f.fy)} this fiscal year` : ""}${f.growth !== null ? ` · ${fmtSigned(f.growth)} ${sinceYa(m)}` : ""}`;
       body += `<td class="${c === REF ? "mx-ref" : ""}" style="${mxShade(rk)}" title="${esc(tip)}">${mxCellText(row, f, rowMode)}</td>`;
     }
     // market column
@@ -1310,6 +1337,7 @@ function renderFinMatrix(m) {
     else if (mode === "amt") mk = fmtArba(row.market).replace("Rs ", "").replace(" arba", "");
     else if (mode === "share") mk = "100%";
     else if (mode === "mix") mk = row.total ? "100%" : fmtPct(Object.values(row.cells)[0]?.mktMix);
+    else if (mode === "fy") { const x = Object.values(row.cells)[0]?.mktFy; mk = x === undefined || x === null ? "—" : `${x >= 0 ? "+" : "−"}${Math.abs(arba(x)).toFixed(1)}`; }
     else if (mode === "growth") mk = fmtSigned(Object.values(row.cells)[0]?.mktGrowth ?? null, "%", 0);
     else mk = `${Object.keys(row.cells).length} banks`;
     body += `<td class="mx-mkt">${mk}</td></tr>`;
@@ -1379,7 +1407,7 @@ function renderOverviewFinancials() {
     const f = itemFacts(m, REF, it);
     if (!f) return "";
     return `<div class="kpi"><div class="k-label">${esc(it.label)}</div><div class="k-value">${fmtArba(f.amt)}</div>
-      <div class="k-facts">${it.total ? "" : `<span><b>${fmtPct(f.mix)}</b> of ${esc(R())}'s ${it.base}</span>`}<span><b>${fmtPct(f.share, 2)}</b> market share</span><span>Rank <b>#${f.rank}</b> of ${f.n}</span>${f.growth !== null ? `<span><b>${fmtSigned(f.growth)}</b> ${sinceYa(m)}</span>` : ""}</div></div>`;
+      <div class="k-facts">${it.total ? "" : `<span><b>${fmtPct(f.mix)}</b> of ${esc(R())}'s ${it.base}</span>`}<span><b>${fmtPct(f.share, 2)}</b> market share</span><span>Rank <b>#${f.rank}</b> of ${f.n}</span>${f.fy !== null ? `<span><b>${fmtChg(f.fy)}</b> this fiscal year</span>` : ""}${f.growth !== null ? `<span><b>${fmtSigned(f.growth)}</b> ${sinceYa(m)}</span>` : ""}</div></div>`;
   };
   const I = (k) => itemByKey(k);
   const np = FIN_METRICS[0], s = finStats(m, np), pg = finStats(m, FIN_METRICS[1]);
