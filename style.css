@@ -728,3 +728,35 @@ h1 { font-size: clamp(1.7rem, 2.6vw, 2.25rem); font-weight: 800; letter-spacing:
 @media print { .foot-about > p { display: block; } }
 .rr-v b.up { color: var(--good); } .rr-v b.down { color: var(--bad); }
 .bd td.up { color: var(--good); } .bd td.down { color: var(--bad); }
+
+/* Financial balance cards: headline, context, then a tidy grid of changes */
+.fc { display: flex; flex-direction: column; }
+.fc-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.fc-rank { font-size: .78rem; font-weight: 700; color: var(--brand-ink); background: var(--brand-tint); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.fc-rank small { font-weight: 500; color: var(--muted); }
+.fc .k-value { margin: 6px 0 2px; }
+.fc-ctx { font-size: .76rem; color: var(--muted); }
+.fc-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hair-soft); }
+.fc-grid span { font-size: .64rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--faint); white-space: nowrap; }
+.fc-grid b { font-size: .92rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.fc-grid b.up { color: var(--good); } .fc-grid b.down { color: var(--bad); }
+.fc-grid i { font-style: normal; font-size: .7rem; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fc-foot { margin-top: 8px; font-size: .62rem; color: var(--faint); }
+.kpi.featured.fc .fc-rank { background: rgba(255,255,255,.16); color: #fff; }
+.kpi.featured.fc .fc-rank small, .kpi.featured.fc .fc-ctx, .kpi.featured.fc .fc-grid span, .kpi.featured.fc .fc-grid i, .kpi.featured.fc .fc-foot { color: rgba(255,255,255,.72); }
+.kpi.featured.fc .fc-grid { border-top-color: rgba(255,255,255,.18); }
+.kpi.featured.fc .fc-grid b { color: #fff; }
+.kpi.featured.fc .fc-grid b.up { color: #9FE0BC; } .kpi.featured.fc .fc-grid b.down { color: #FFB3BC; }
+@media (max-width: 760px) {
+  .fc-grid { gap: 1px 6px; }
+  .fc-grid b { font-size: .8rem; }
+  .fc-grid span { font-size: .58rem; letter-spacing: .02em; }
+  .fc-grid i { font-size: .64rem; }
+  .fc-ctx { font-size: .7rem; }
+}
+
+.fc-grid.fc-grid-2 { grid-template-columns: repeat(2, 1fr); }
+.fc-note { grid-column: 1 / -1; margin: 2px 2px 0; font-size: .72rem; color: var(--faint); line-height: 1.5; }
+.fc-note b { color: var(--muted); font-weight: 600; }
+.fc .fc-ctx { margin-bottom: 12px; }
+.fc .fc-grid { margin-top: auto; }

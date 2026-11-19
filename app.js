@@ -1070,19 +1070,38 @@ function renderFinancials() {
   renderFinBreakdown(m, kind);
 }
 
+// One balance card: the amount, one context line, and a small grid of changes —
+// this month, this fiscal year and 12 months — with the same periods a year earlier underneath.
+function finCard(m, it, cls = "") {
+  const f = itemFacts(m, REF, it);
+  if (!f) return "";
+  const n = (v) => (v === null || v === undefined || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(arba(v)).toFixed(2)}`);
+  const tone = (v) => (v === null || v === undefined ? "" : v >= 0 ? "up" : "down");
+  const lyMonth = monthName(shiftId(m.id, -12));
+  return `<div class="kpi fc ${cls}">
+    <div class="fc-top"><span class="k-label">${esc(it.label)}</span><span class="fc-rank" title="Rank among ${f.n} banks by amount">#${f.rank}<small>/${f.n}</small></span></div>
+    <div class="k-value">${fmtArba(f.amt)}</div>
+    <div class="fc-ctx">${fmtPct(f.share, 2)} market share${it.total ? "" : ` · ${fmtPct(f.mix)} of ${it.base}`}</div>
+    <div class="fc-grid" role="table" aria-label="Changes, Rs arba">
+      <span role="columnheader">${mName(m)}</span><span role="columnheader">This FY</span><span role="columnheader">12 months</span>
+      <b class="${tone(f.mo)}" title="Net change during ${monthName(m.id)}, Rs arba">${n(f.mo)}</b>
+      <b class="${tone(f.fy)}" title="Change since the end of ${fyFrom(m)}, Rs arba">${n(f.fy)}</b>
+      <b class="${tone(f.growth)}" title="Change since ${yaName(m)}">${fmtSigned(f.growth)}</b>
+      <i title="${lyMonth}: net change, Rs arba">${n(f.moLy)}</i><i title="Same months a year earlier, Rs arba">${n(f.fyLy)}</i><i title="All banks over the same 12 months">${f.mktGrowth === null ? "" : `all ${fmtSigned(f.mktGrowth)}`}</i>
+    </div>
+  </div>`;
+}
+// one note under a row of cards instead of a footnote on each
+const fcNote = (m) => `<p class="fc-note">Changes in Rs arba · <b>${mName(m)}</b> = net change during the month · <b>This FY</b> = since the end of ${fyFrom(m)} · <b>12 months</b> = since ${yaName(m)} · smaller grey figures = the same period a year earlier (12 months: all banks)</p>`;
+
 // "At a glance" cards for the comparison bank.
 function renderFinSnapshot(m) {
-  const card = (it, cls = "") => {
-    const f = itemFacts(m, REF, it);
-    if (!f) return "";
-    return `<div class="kpi ${cls}"><div class="k-label">${esc(it.label)}</div><div class="k-value">${fmtArba(f.amt)}</div>
-      <div class="k-facts">${it.total ? "" : `<span><b>${fmtPct(f.mix)}</b> of ${esc(R())}'s ${it.base}</span>`}<span><b>${fmtPct(f.share, 2)}</b> market share</span><span>Rank <b>#${f.rank}</b> of ${f.n}</span>${f.mo !== null ? `<span><b>${fmtChg(f.mo)}</b> in ${mName(m)}${f.moLy !== null ? ` <span class="dim">(${fmtChg(f.moLy)} a year earlier)</span>` : ""}</span>` : ""}${f.fy !== null ? `<span><b>${fmtChg(f.fy)}</b> this fiscal year${f.fyLy !== null ? ` <span class="dim">(${fmtChg(f.fyLy)} same period last year)</span>` : ""}</span>` : ""}${f.growth !== null ? `<span><b>${fmtSigned(f.growth)}</b> ${sinceYa(m)}</span>` : ""}</div></div>`;
-  };
+  const card = (it, cls = "") => finCard(m, it, cls);
   const I = (k) => itemByKey(k);
   const cards = state.finSection === "deposit"
     ? [card(I("deposits"), "featured"), card(I("dep_current")), card(I("dep_savings")), card(I("dep_fixed")), card(I("dep_call"))]
     : [card(I("loans"), "featured"), ...topProducts(m, 4).map((it) => card(it))];
-  $("fin-kpis").innerHTML = cards.join("");
+  $("fin-kpis").innerHTML = cards.join("") + (state.finSection === "profit" ? "" : fcNote(m));
   $("fin-kpis").className = "kpis fin-kpis";
 }
 // The comparison bank's largest loan products, for the Loans cards.
@@ -1455,12 +1474,7 @@ function renderOverviewFinancials() {
   const box = $("ov-fin");
   if (!box || !state.fin || !state.model) return;
   const m = state.fin.months.at(-1);
-  const line = (it) => {
-    const f = itemFacts(m, REF, it);
-    if (!f) return "";
-    return `<div class="kpi"><div class="k-label">${esc(it.label)}</div><div class="k-value">${fmtArba(f.amt)}</div>
-      <div class="k-facts">${it.total ? "" : `<span><b>${fmtPct(f.mix)}</b> of ${esc(R())}'s ${it.base}</span>`}<span><b>${fmtPct(f.share, 2)}</b> market share</span><span>Rank <b>#${f.rank}</b> of ${f.n}</span>${f.mo !== null ? `<span><b>${fmtChg(f.mo)}</b> in ${mName(m)}${f.moLy !== null ? ` <span class="dim">(${fmtChg(f.moLy)} a year earlier)</span>` : ""}</span>` : ""}${f.fy !== null ? `<span><b>${fmtChg(f.fy)}</b> this fiscal year${f.fyLy !== null ? ` <span class="dim">(${fmtChg(f.fyLy)} same period last year)</span>` : ""}</span>` : ""}${f.growth !== null ? `<span><b>${fmtSigned(f.growth)}</b> ${sinceYa(m)}</span>` : ""}</div></div>`;
-  };
+  const line = (it) => finCard(m, it);
   const I = (k) => itemByKey(k);
   const np = FIN_METRICS[0], s = finStats(m, np), pg = finStats(m, FIN_METRICS[1]);
   const products = FIN_ITEMS.product.items.filter((it) => !it.memo).map((it) => ({ it: { ...it, kind: "product", base: "loans" } })).map((x) => ({ ...x, f: itemFacts(m, REF, x.it) })).filter((x) => x.f && x.f.amt > 0);
@@ -1469,7 +1483,11 @@ function renderOverviewFinancials() {
   box.innerHTML = `<div class="section-title"><h2>Financial position · ${esc(m.bs)}</h2>
       <p>Balance-sheet figures from Nepal Rastra Bank's monthly statistics (${esc(m.label)}) · <button type="button" class="linkish" data-tab="fin">Open Bank financials →</button></p></div>
     <div class="kpis fin-kpis">${line(I("deposits"))}${line(I("dep_current"))}${line(I("dep_savings"))}${line(I("loans"))}
-      ${s ? `<div class="kpi"><div class="k-label">Net profit <span class="k-sub">(${esc(ytdName(m))})</span></div><div class="k-value">${fmtArba(s.ref)}</div><div class="k-facts"><span>Rank <b>#${s.rank}</b> of ${s.n}</span>${pg && pg.ref !== null ? `<span><b>${fmtSigned(pg.ref)}</b> vs ${esc(ytdName(yearAgo(m) || m))}</span>` : ""}</div></div>` : ""}</div>
+      ${s ? `<div class="kpi fc"><div class="fc-top"><span class="k-label">Net profit</span><span class="fc-rank" title="Rank among ${s.n} banks">#${s.rank}<small>/${s.n}</small></span></div>
+        <div class="k-value">${fmtArba(s.ref)}</div><div class="fc-ctx">${esc(ytdName(m))}</div>
+        <div class="fc-grid fc-grid-2"><span>vs a year earlier</span><span>Market median</span>
+          <b class="${pg && pg.ref !== null ? (pg.ref >= 0 ? "up" : "down") : ""}">${pg && pg.ref !== null ? fmtSigned(pg.ref) : "—"}</b><b>${pg ? fmtSigned(pg.avg) : "—"}</b></div></div>` : ""}</div>
+    ${fcNote(m)}
     <div class="ov-loans">
       <div class="card ov-list"><h3>Loan products where ${esc(R())} ranks highest</h3><ol>${byRank.slice(0, 4).map(li).join("")}</ol></div>
       <div class="card ov-list"><h3>Loan products where ${esc(R())} ranks lowest</h3><ol>${byRank.slice(-4).reverse().map(li).join("")}</ol></div>
